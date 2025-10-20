@@ -17,3 +17,7 @@ ai_model_capacity = 100
 
 acr_sku     = "Standard"
 grafana_sku = "Standard"
+
+# Optional: Object ID of current user for development RBAC assignments
+# Get with: az ad signed-in-user show --query id --output tsv
+# current_user_object_id = "12345678-1234-1234-1234-123456789012"

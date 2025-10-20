@@ -2,16 +2,26 @@
 MCP Server providing function calling capabilities to agents.
 
 This server exposes tools that can be called by agents and bridges
-them to the API server.
+them to the API server. Runs as HTTP server with CORS support.
 """
 import os
 import httpx
 from fastmcp import FastMCP
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 load_dotenv()
 
 mcp = FastMCP("Observability Demo MCP Server")
+
+# Add CORS middleware
+mcp.app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 API_SERVER_URL = os.getenv("API_SERVER_URL", "http://localhost:8000")
 
@@ -59,8 +69,14 @@ async def get_status() -> str:
 
 
 def main():
-    """Start the MCP server."""
-    mcp.run()
+    """Start the MCP server as HTTP server."""
+    import uvicorn
+    
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8001"))
+    
+    print(f"🚀 Starting MCP Server on {host}:{port}")
+    uvicorn.run(mcp.app, host=host, port=port)
 
 
 if __name__ == "__main__":

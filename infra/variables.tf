@@ -145,3 +145,14 @@ variable "grafana_sku" {
   EOT
   default     = "Standard"
 }
+
+variable "current_user_object_id" {
+  type        = string
+  description = <<-EOT
+    Object ID of the current user for development RBAC assignments.
+    Optional - if not provided, user-specific role assignments will be skipped.
+    Get this value with: az ad signed-in-user show --query id --output tsv
+    Example: "12345678-1234-1234-1234-123456789012"
+  EOT
+  default     = null
+}

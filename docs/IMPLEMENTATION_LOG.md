@@ -169,3 +169,47 @@ Each service has been configured with minimal, focused dependencies through pypr
 5. Add comprehensive unit and integration tests
 6. Implement CI/CD pipeline for container builds
 7. Add Kubernetes deployment configurations
+
+## 2025-10-20: Azure Integration and RBAC Configuration
+
+### Objective
+Updated services for Azure integration with DefaultAzureCredential authentication, HTTP-based MCP server, and proper RBAC configuration.
+
+### Changes Implemented
+
+#### Service Updates
+1. **MCP Server**: Converted from stdio to HTTP server with CORS support
+2. **Agent**: Created two variants - Foundry Agent Service and Direct Model Access
+3. **All Services**: Added DefaultAzureCredential authentication and configurable ports
+4. **RBAC**: Added proper role assignments in Terraform
+
+#### Terraform Issues Fixed
+**Problem**: `uuidv4()` function error in Terraform role assignments
+```
+Error: Call to unknown function "uuidv4()"
+```
+
+**Root Cause**: Terraform doesn't have a built-in `uuidv4()` function
+
+**Solution**: Used `random_uuid` resource instead:
+```terraform
+resource "random_uuid" "role_assignment_id" {}
+resource "azapi_resource" "role_assignment" {
+  name = random_uuid.role_assignment_id.result
+  # ...
+}
+```
+
+**Files Changed**:
+- `infra/rbac.tf` - Fixed UUID generation and removed azurerm dependencies
+- `infra/providers.tf` - Maintains azapi-only approach (no azurerm provider)
+- `infra/variables.tf` - Added current_user_object_id variable for development RBAC
+- `docs/COMMON_ERRORS.md` - Documented UUID fix and azapi-only requirement
+
+**Important Architecture Decision**: This project uses **only azapi provider** - never add azurerm provider. All Azure resources and data sources must use azapi equivalents.
+
+### Architectural Changes
+- MCP Server now runs as HTTP server (port 8001) instead of stdio
+- All services support configurable hosts/ports via environment variables
+- Two agent variants: Foundry-based and direct model access
+- Complete DefaultAzureCredential authentication chain

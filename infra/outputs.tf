@@ -69,3 +69,23 @@ output "aks_subnet_id" {
   description = "Resource ID of the AKS subnet"
   value       = azapi_resource.aks_subnet.id
 }
+
+output "user_assigned_identity_id" {
+  description = "Resource ID of the user-assigned managed identity"
+  value       = azapi_resource.user_assigned_identity.id
+}
+
+output "user_assigned_identity_client_id" {
+  description = "Client ID of the user-assigned managed identity"
+  value       = azapi_resource.user_assigned_identity.output.properties.clientId
+}
+
+output "user_assigned_identity_principal_id" {
+  description = "Principal ID of the user-assigned managed identity"
+  value       = azapi_resource.user_assigned_identity.output.properties.principalId
+}
+
+output "ai_models_endpoint" {
+  description = "Direct endpoint URL for Azure AI models (for inference)"
+  value       = "${azapi_resource.ai_services.output.properties.endpoint}models"
+}

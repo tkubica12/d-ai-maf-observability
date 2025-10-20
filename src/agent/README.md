@@ -1,19 +1,36 @@
 # Agent
 
-Microsoft Agent Framework (MAF) agent that integrates with MCP server for function calling.
+Microsoft Agent Framework (MAF) agents with two variants for Azure AI integration.
+
+## Agent Variants
+
+### 1. Foundry Agent Service (`main.py`)
+Uses Azure AI Foundry Agent Service for complete agent lifecycle management:
+- Full MAF agent runtime through Azure AI Foundry
+- Built-in tool integration and orchestration
+- Managed conversation state and threading
+- Uses DefaultAzureCredential for authentication
+
+### 2. Direct Model Access (`main_direct.py`)
+Direct LLM access with MAF patterns:
+- Direct calls to Azure AI models via ChatCompletionsClient
+- Manual tool orchestration and conversation management
+- Custom agent logic implementation
+- Uses DefaultAzureCredential for authentication
 
 ## Features
 
-- Uses MAF for agent runtime
-- Integrates with MCP server for tool calling
-- Mandatory tool usage for data processing
-- Sends simple user messages and reports back responses
+- Uses Microsoft Agent Framework (MAF) for agent runtime
+- Integrates with MCP server via HTTP for tool calling
+- DefaultAzureCredential authentication (no API keys needed)
+- CORS support for web integration
+- Configurable ports and endpoints
 
 ## Setup
 
 1. Install dependencies:
 ```bash
-pip install azure-ai-projects azure-identity python-dotenv mcp
+uv sync
 ```
 
 2. Create `.env` file (see `.env.example` for reference):
@@ -21,36 +38,28 @@ pip install azure-ai-projects azure-identity python-dotenv mcp
 cp .env.example .env
 ```
 
-3. Configure your Azure AI Project connection string in `.env`:
-```
-PROJECT_CONNECTION_STRING=endpoint=https://your-project.cognitiveservices.azure.com/;...
-```
+3. Configure Azure AI endpoints and ensure proper RBAC roles are assigned:
+   - For Foundry variant: Set `PROJECT_ENDPOINT`
+   - For Direct variant: Set `AI_ENDPOINT`
 
-4. Ensure MCP server path is correctly set (default: `../mcp_server/main.py`)
+4. Ensure MCP server is running on configured port (default: 8001)
 
-5. Make sure the API server is running (or update API_SERVER_URL in MCP server config)
+5. Make sure the API server is running (default: 8000)
 
 ## Running
 
+### Foundry Agent Service Variant
+```bash
+python main.py
+```
+
+### Direct Model Access Variant
+```bash
+python main_direct.py
+```
+
 ### Simple Demo Mode (No Azure Required)
-If PROJECT_CONNECTION_STRING is not set, the agent runs in demo mode:
-```bash
-python main.py
-```
-
-### Full Mode (Azure AI Project Required)
-With Azure AI Project configured:
-```bash
-python main.py
-```
-
-The agent will:
-1. Connect to Azure AI Project
-2. Start MCP server as subprocess
-3. Create an agent with available MCP tools
-4. Send a test message
-5. Use the `process_data` tool (mandatory)
-6. Display the response
+If endpoints are not configured, agents run in demo mode showing expected behavior.
 
 ## Docker
 
@@ -63,7 +72,23 @@ docker run --env-file .env agent
 ## Configuration
 
 Environment variables:
-- `PROJECT_CONNECTION_STRING` - Azure AI Project connection (optional for demo)
-- `MODEL_DEPLOYMENT` - Model deployment name (default: gpt-4o)
-- `MCP_SERVER_PATH` - Path to MCP server main.py (default: ../mcp_server/main.py)
+- `PROJECT_ENDPOINT` - Azure AI Foundry project endpoint (for Foundry variant)
+- `AI_ENDPOINT` - Direct Azure AI models endpoint (for Direct variant)
+- `MODEL_DEPLOYMENT` / `MODEL_NAME` - Model deployment name (default: gpt-4o)
+- `MCP_SERVER_URL` - MCP server URL (default: http://localhost:8001)
 - `API_SERVER_URL` - API server URL for MCP (default: http://localhost:8000)
+- `HOST` - Server host (default: 0.0.0.0)
+- `PORT` - Server port (default: 8002)
+
+## Authentication
+
+Both agents use DefaultAzureCredential which attempts authentication in this order:
+1. Environment variables (service principal)
+2. Managed identity (when running in Azure)
+3. Azure CLI (during development)
+4. Visual Studio Code
+5. Azure PowerShell
+
+Ensure proper RBAC roles are assigned:
+- `Cognitive Services User` - Basic model access
+- `Cognitive Services OpenAI User` - OpenAI model access

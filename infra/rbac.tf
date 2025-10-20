@@ -1,0 +1,80 @@
+resource "azapi_resource" "user_assigned_identity" {
+  type      = "Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31"
+  name      = "${var.project_name}-${var.environment}-identity"
+  location  = var.location
+  parent_id = azapi_resource.rg.id
+}
+
+# Generate UUIDs for role assignments
+resource "random_uuid" "cognitive_services_user_role_id" {}
+resource "random_uuid" "cognitive_services_openai_user_role_id" {}
+resource "random_uuid" "current_user_cognitive_services_user_role_id" {}
+resource "random_uuid" "current_user_cognitive_services_openai_user_role_id" {}
+
+# Role assignment for Azure AI Services access - Cognitive Services User
+resource "azapi_resource" "cognitive_services_user_role_assignment" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.cognitive_services_user_role_id.result
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/a97b65f3-24c7-4388-baec-2e87135dc908" # Cognitive Services User
+      principalId      = azapi_resource.user_assigned_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
+    }
+  }
+
+  depends_on = [azapi_resource.user_assigned_identity]
+}
+
+# Role assignment for Azure AI Services access - Cognitive Services OpenAI User (for direct model access)
+resource "azapi_resource" "cognitive_services_openai_user_role_assignment" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.cognitive_services_openai_user_role_id.result
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/5e0bd9bd-7b93-4f28-af87-19fc36ad61bd" # Cognitive Services OpenAI User
+      principalId      = azapi_resource.user_assigned_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
+    }
+  }
+
+  depends_on = [azapi_resource.user_assigned_identity]
+}
+
+# Role assignment for current user - needed for development
+# Note: Provide current_user_object_id variable for development access
+resource "azapi_resource" "current_user_cognitive_services_user_role" {
+  count     = var.current_user_object_id != null ? 1 : 0
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.current_user_cognitive_services_user_role_id.result
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/a97b65f3-24c7-4388-baec-2e87135dc908" # Cognitive Services User
+      principalId      = var.current_user_object_id
+      principalType    = "User"
+    }
+  }
+}
+
+resource "azapi_resource" "current_user_cognitive_services_openai_user_role" {
+  count     = var.current_user_object_id != null ? 1 : 0
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.current_user_cognitive_services_openai_user_role_id.result
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/5e0bd9bd-7b93-4f28-af87-19fc36ad61bd" # Cognitive Services OpenAI User
+      principalId      = var.current_user_object_id
+      principalType    = "User"
+    }
+  }
+}
+
+# RBAC configuration for Azure AI Services access
