@@ -64,8 +64,7 @@ When investigating complex issues:
 ## 5. Infrastructure as Code
 
 ### 5.1 Providers
-* Use `azurerm` for standard Azure resources.
-* Use `azapi` for bleeding‑edge features unsupported in `azurerm`.
+* Use `azapi`, NOT azurerm.
 
 ### 5.2 File Organization
 Segment resource types: `networking.tf`, `service_bus.tf`, `rbac.tf`, etc. If a type bloats, split further: `container_app.frontend.tf`, `container_app.backend.tf`.
