@@ -17,8 +17,8 @@ Provide a clear, single reference for implementing, extending, and maintaining A
 ### 3.1 Documentation
 * Primary documentation channel inside code: **docstrings** (revise them whenever code changes behavior or signature).
 * Only add code comments for non‑obvious logic or critical nuances. Never for progress logs, migration notes, or “previous implementation” commentary.
-* Update `docs/ImplementationLog.md` with meaningful architectural or technical decisions (not micro‑steps) when a feature is completed or a design choice is finalized.
-* Add confirmed recurring pitfalls to `docs/CommonErrors.md` (after user confirmation—see Section 6).
+* Update `docs/IMPLEMENTATION_LOG.md` with meaningful architectural or technical decisions (not micro‑steps) when a feature is completed or a design choice is finalized.
+* Add confirmed recurring pitfalls to `docs/COMMON_ERRORS.md` (after user confirmation—see Section 6).
 * Each component/service keeps concise run & test instructions in its local `README.md`.
 
 ### 3.2 Refactoring & Improvements
@@ -84,14 +84,14 @@ Segment resource types: `networking.tf`, `service_bus.tf`, `rbac.tf`, etc. If a 
 
 These constraints exist to prevent uncontrolled documentation sprawl and progress leakage into code:
 
-1. Implementation Log Boundaries: Implementation progress, rationale, or “this replaces X” notes belong in `docs/ImplementationLog.md`—never as inline code comments or new files.
-2. Common Errors Workflow: Only after confirming with the user that an issue is broadly relevant, add it to `docs/CommonErrors.md`. Do not create parallel error collections.
-3. Controlled Design Changes: Architectural or behavioral design alterations should be reflected (after approval) in `docs/Design.md`. Treat `Design.md` as a guiding artifact; do not mutate it unilaterally.
+1. Implementation Log Boundaries: Implementation progress, rationale, or “this replaces X” notes belong in `docs/IMPLEMENTATION_LOG.md`—never as inline code comments or new files.
+2. Common Errors Workflow: Only after confirming with the user that an issue is broadly relevant, add it to `docs/COMMON_ERRORS.md`. Do not create parallel error collections.
+3. Controlled Design Changes: Architectural or behavioral design alterations should be reflected (after approval) in `docs/DESIGN.md`. Treat `DESIGN.md` as a guiding artifact; do not mutate it unilaterally.
 4. Localized Documentation First: Prefer updating the affected component’s `README.md` for usage/run/test changes before touching high‑level design docs.
 5. Tests over Scratch Scripts: Validate behaviors via `pytest` (unit/integration). Temporary investigative scripts must follow Section 7 and be removed post‑learning.
-6. Communication Channel Priority: To inform about implementation decisions use (a) chat output, (b) component `README.md` (brief), (c) `Design.md` (after approval). Do not introduce new permanent doc files unless genuinely required.
+6. Communication Channel Priority: To inform about implementation decisions use (a) chat output, (b) component `README.md` (brief), (c) `DESIGN.md` (after approval). Do not introduce new permanent doc files unless genuinely required.
 7. New Doc File Exception: If a truly new doc artifact is justified, prefix filename with `ADHOC_` and notify user. Expect eventual consolidation or deletion.
-8. No Progress/History Comments: Ban inline comments like “// updated previous logic” or “# temporary hack (will remove)”—instead record durable decisions in `ImplementationLog.md`.
+8. No Progress/History Comments: Ban inline comments like “// updated previous logic” or “# temporary hack (will remove)”—instead record durable decisions in `IMPLEMENTATION_LOG.md`.
 
 ## 7. Ad‑Hoc / Disposable Artifacts
 
@@ -108,7 +108,7 @@ Rules:
 ## 8. Change Control & Communication
 
 1. Before major architectural changes: summarize intent, risk, alternatives in chat for approval.
-2. After implementing a feature: update relevant docstrings + (if needed) `ImplementationLog.md`.
+2. After implementing a feature: update relevant docstrings + (if needed) `IMPLEMENTATION_LOG.md`.
 3. If you discover systemic flaw: propose remediation path; avoid broad speculative refactors without confirmation.
 
 ## 9. Quick Reference Checklist
@@ -119,7 +119,7 @@ Development Flow:
 3. Implement feature (docstrings maintained—no progress comments).
 4. Run `pytest` (unit + integration if relevant).
 5. Update service `README.md` for operational changes.
-6. Log architectural decision in `ImplementationLog.md` if strategic.
+6. Log architectural decision in `IMPLEMENTATION_LOG.md` if strategic.
 7. Remove any `adhoc_` artifacts created during exploration.
 
 Terraform Flow:
@@ -137,5 +137,5 @@ Ad‑Hoc Script Flow:
 
 This `AGENTS.md` centralizes operational & stylistic guidance. If conflicts arise:
 1. Explicit user instruction (chat) overrides this file case‑by‑case.
-2. `Design.md` governs architecture (pending approved changes).
+2. `DESIGN.md` governs architecture (pending approved changes).
 3. This file governs daily engineering discipline & hygiene.
