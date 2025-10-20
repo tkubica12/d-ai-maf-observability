@@ -12,7 +12,7 @@ aks_node_vm_size       = "Standard_D4s_v3"
 aks_kubernetes_version = null
 
 ai_model_name     = "gpt-5-nano"
-ai_model_version  = "latest"
+ai_model_version  = "2025-08-07"
 ai_model_capacity = 100
 
 acr_sku     = "Standard"

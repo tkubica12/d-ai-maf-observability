@@ -66,13 +66,13 @@ resource "azapi_resource" "aks" {
 
 resource "azapi_resource" "aks_acr_role" {
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = "${random_string.acr_suffix.result}-aks-acr-pull"
+  name      = uuid()
   parent_id = azapi_resource.acr.id
 
   body = {
     properties = {
       roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/7f951dda-4ed3-4680-a7ca-43fe172d538d"
-      principalId      = jsondecode(azapi_resource.aks_identity.output).properties.principalId
+      principalId      = azapi_resource.aks_identity.output.properties.principalId
       principalType    = "ServicePrincipal"
     }
   }

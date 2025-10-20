@@ -14,7 +14,7 @@ variable "location" {
     Choose a region that supports all required services (AKS, AI Foundry, etc.).
     Example: "eastus", "westeurope", "westus2"
   EOT
-  default     = "eastus"
+  default     = "swedencentral"
 }
 
 variable "resource_group_name" {
@@ -74,7 +74,7 @@ variable "aks_node_count" {
     Consider workload requirements and high availability needs.
     Minimum: 1, Recommended for production: 3
   EOT
-  default     = 3
+  default     = 1
 }
 
 variable "aks_node_vm_size" {
@@ -84,7 +84,7 @@ variable "aks_node_vm_size" {
     Choose based on workload requirements (CPU, memory, GPU).
     Example: "Standard_D4s_v3", "Standard_DS2_v2"
   EOT
-  default     = "Standard_D4s_v3"
+  default     = "Standard_B4as_v2"
 }
 
 variable "aks_kubernetes_version" {
@@ -94,13 +94,14 @@ variable "aks_kubernetes_version" {
     Use "automatic" for auto-upgrade or specify version like "1.28".
     Check available versions with: az aks get-versions --location <location>
   EOT
-  default     = null
+  default     = "1.32"
 }
 
 variable "ai_model_name" {
   type        = string
   description = <<-EOT
     Name of the AI model to deploy in Azure AI Foundry.
+    Supported models: "gpt-5-nano", "gpt-4o", "gpt-4o-mini", "gpt-35-turbo"
     Example: "gpt-5-nano"
   EOT
   default     = "gpt-5-nano"
@@ -111,9 +112,9 @@ variable "ai_model_version" {
   description = <<-EOT
     Version of the AI model to deploy.
     Check available versions in Azure AI Foundry portal.
-    Example: "0301", "latest"
+    Example: "2025-08-07", "latest"
   EOT
-  default     = "latest"
+  default     = "2025-08-07"
 }
 
 variable "ai_model_capacity" {
@@ -133,7 +134,7 @@ variable "acr_sku" {
     Options: "Basic", "Standard", "Premium"
     Premium required for geo-replication and private endpoints.
   EOT
-  default     = "Standard"
+  default     = "Basic"
 }
 
 variable "grafana_sku" {

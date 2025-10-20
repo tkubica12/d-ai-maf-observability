@@ -68,7 +68,7 @@ resource "azapi_resource" "grafana" {
 
 resource "azapi_resource" "grafana_prometheus_reader_role" {
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = "${random_string.acr_suffix.result}-grafana-prometheus"
+  name      = uuid()
   parent_id = azapi_resource.prometheus.id
 
   body = {
