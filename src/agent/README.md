@@ -1,30 +1,41 @@
 # Agent
 
-Microsoft Agent Framework (MAF) agents with two variants for Azure AI integration.
+Microsoft Agent Framework (MAF) agents with unified testing approach for Azure AI integration.
 
-## Agent Variants
+## Unified Agent Testing
 
-### 1. Foundry Agent Service (`main.py`)
-Uses Azure AI Foundry Agent Service for complete agent lifecycle management:
-- Full MAF agent runtime through Azure AI Foundry
+The new `unified_agent.py` provides comprehensive testing of both MAF approaches in a single file:
+
+### Approach 1: Direct LLM Agent with Function Calling
+- Direct calls to Azure AI models via ChatCompletionsClient
+- Function calling for API tools (get product of the day)
+- MCP integration for stock lookup
+- Manual orchestration and conversation management
+
+### Approach 2: Foundry Agent Service with Registered Agent  
+- Complete agent lifecycle management through Azure AI Foundry
+- Agent registration, execution, and cleanup
 - Built-in tool integration and orchestration
 - Managed conversation state and threading
-- Uses DefaultAzureCredential for authentication
 
-### 2. Direct Model Access (`main_direct.py`)
-Direct LLM access with MAF patterns:
-- Direct calls to Azure AI models via ChatCompletionsClient
-- Manual tool orchestration and conversation management
-- Custom agent logic implementation
-- Uses DefaultAzureCredential for authentication
+## Tool Integration
 
-## Features
+The unified agent demonstrates network-based tool integration:
 
-- Uses Microsoft Agent Framework (MAF) for agent runtime
-- Integrates with MCP server via HTTP for tool calling
-- DefaultAzureCredential authentication (no API keys needed)
-- CORS support for web integration
-- Configurable ports and endpoints
+### API Tools (via HTTP Function Calling)
+- **get_product_of_the_day**: Calls API server to get today's featured product
+- Returns: `{product_id, product_description}`
+
+### MCP Tools (via MCP Server)
+- **get_product_stock**: Calls MCP server to get stock levels
+- Input: `product_id` from API call
+- Returns: `{product_id, stock_count, available}`
+
+### End-to-End Flow
+1. Agent gets product of the day via API function call
+2. Uses product description in response
+3. Looks up stock using product_id via MCP
+4. Provides comprehensive answer with both product info and availability
 
 ## Setup
 

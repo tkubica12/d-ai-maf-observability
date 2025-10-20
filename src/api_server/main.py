@@ -5,6 +5,7 @@ This server provides a simple API endpoint that can be called through
 function calling from the MCP server.
 """
 import os
+import random
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -23,6 +24,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Static product data
+PRODUCTS = [
+    {"product_id": "LAPTOP001", "product_description": "High-performance gaming laptop with RTX 4080"},
+    {"product_id": "PHONE002", "product_description": "Latest smartphone with AI-powered camera"},
+    {"product_id": "TABLET003", "product_description": "Professional tablet with stylus support"},
+    {"product_id": "HEADSET004", "product_description": "Wireless noise-canceling headphones"},
+    {"product_id": "MONITOR005", "product_description": "4K ultra-wide monitor for productivity"},
+    {"product_id": "KEYBOARD006", "product_description": "Mechanical gaming keyboard with RGB lighting"},
+    {"product_id": "MOUSE007", "product_description": "Precision wireless gaming mouse"},
+    {"product_id": "SPEAKER008", "product_description": "Premium Bluetooth speaker system"},
+]
+
 
 class ProcessDataRequest(BaseModel):
     """Request model for processing data."""
@@ -33,6 +46,12 @@ class ProcessDataResponse(BaseModel):
     """Response model for processing data."""
     result: str
     message: str
+
+
+class ProductResponse(BaseModel):
+    """Response model for product of the day."""
+    product_id: str
+    product_description: str
 
 
 @app.get("/")
@@ -49,6 +68,21 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/product-of-the-day", response_model=ProductResponse)
+async def get_product_of_the_day():
+    """
+    Get a randomly selected product of the day.
+    
+    Returns:
+        ProductResponse: Randomly selected product with ID and description
+    """
+    product = random.choice(PRODUCTS)
+    return ProductResponse(
+        product_id=product["product_id"],
+        product_description=product["product_description"]
+    )
 
 
 @app.post("/process", response_model=ProcessDataResponse)
