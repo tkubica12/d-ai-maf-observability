@@ -1,22 +1,4 @@
 subscription_id      = "00000000-0000-0000-0000-000000000000"
-location             = "eastus"
-resource_group_name  = "rg-maf-observability"
-project_name         = "mafobs"
-environment          = "dev"
-
-vnet_address_space        = ["10.0.0.0/16"]
-aks_subnet_address_prefix = "10.0.1.0/24"
-
-aks_node_count         = 3
-aks_node_vm_size       = "Standard_D4s_v3"
-aks_kubernetes_version = null
-
-ai_model_name     = "gpt-5-nano"
-ai_model_version  = "2025-08-07"
-ai_model_capacity = 100
-
-acr_sku     = "Standard"
-grafana_sku = "Standard"
 
 # Optional: Object ID of current user for development RBAC assignments
 # Get with: az ad signed-in-user show --query id --output tsv

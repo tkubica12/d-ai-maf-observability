@@ -80,33 +80,39 @@ class ToolRegistry:
         
         return api_ok and mcp_ok
     
-    def get_function_definitions(self) -> List[Dict[str, Any]]:
-        """Get OpenAI function definitions for direct LLM calls."""
-        functions = [
+    def get_tool_definitions(self) -> List[Dict[str, Any]]:
+        """Get Azure AI Inference tool definitions for direct LLM calls."""
+        tools = [
             {
-                "name": "get_product_of_the_day",
-                "description": "Get a randomly selected product of the day from the API server",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
+                "type": "function",
+                "function": {
+                    "name": "get_product_of_the_day",
+                    "description": "Get a randomly selected product of the day from the API server",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
                 }
             }
         ]
         
         # Add discovered MCP tools
         for tool in self.mcp_tools:
-            functions.append({
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') and tool.inputSchema else {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') and tool.inputSchema else {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
                 }
             })
         
-        return functions
+        return tools
     
     async def call_function(self, function_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a function call."""
@@ -204,77 +210,82 @@ class DirectLLMAgent:
                 {"role": "user", "content": user_message}
             ]
             
-            # First LLM call with function definitions
-            print("\n🤖 Making initial LLM call with function definitions...")
+            # First LLM call with tool definitions
+            print("\n🤖 Making initial LLM call with tool definitions...")
             response = await client.complete(
                 model=self.model_name,
                 messages=messages,
-                functions=self.tool_registry.get_function_definitions(),
-                function_call="auto",
-                max_tokens=1000,
-                temperature=0.7
+                tools=self.tool_registry.get_tool_definitions(),
+                tool_choice="auto"
             )
             
             message = response.choices[0].message
             
-            # Process function calls
-            if hasattr(message, 'function_call') and message.function_call:
-                await self._handle_function_call(client, messages, message)
+            # Process tool calls
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                await self._handle_tool_calls(client, messages, message)
             else:
                 print("📨 Assistant:", message.content)
     
-    async def _handle_function_call(self, client, messages: List[Dict], message) -> None:
-        """Handle function calls in the conversation."""
-        function_name = message.function_call.name
-        function_args = json.loads(message.function_call.arguments)
+    async def _handle_tool_calls(self, client, messages: List[Dict], message) -> None:
+        """Handle tool calls in the conversation."""
+        # Add the assistant message with tool calls to conversation
+        messages.append({
+            "role": "assistant",
+            "content": message.content,
+            "tool_calls": [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                } for tool_call in message.tool_calls
+            ]
+        })
         
-        print(f"🔧 Function call: {function_name}({function_args})")
-        
-        # Execute function
-        try:
-            result = await self.tool_registry.call_function(function_name, function_args)
-            print(f"📥 Function result: {result}")
+        # Execute each tool call
+        for tool_call in message.tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
             
-            # Add function call and result to conversation
-            messages.append({
-                "role": "assistant",
-                "content": None,
-                "function_call": {
-                    "name": function_name,
-                    "arguments": message.function_call.arguments
-                }
-            })
-            messages.append({
-                "role": "function",
-                "name": function_name,
-                "content": json.dumps(result)
-            })
+            print(f"🔧 Tool call: {function_name}({function_args})")
             
-            # Continue conversation - might trigger more function calls
-            response = await client.complete(
-                model=self.model_name,
-                messages=messages,
-                functions=self.tool_registry.get_function_definitions(),
-                function_call="auto",
-                max_tokens=1000,
-                temperature=0.7
-            )
-            
-            new_message = response.choices[0].message
-            
-            # Check for more function calls
-            if hasattr(new_message, 'function_call') and new_message.function_call:
-                await self._handle_function_call(client, messages, new_message)
-            else:
-                print("📨 Assistant:", new_message.content)
+            try:
+                result = await self.tool_registry.call_function(function_name, function_args)
+                print(f"📥 Tool result: {result}")
                 
-        except Exception as e:
-            print(f"❌ Function call failed: {e}")
-            messages.append({
-                "role": "function", 
-                "name": function_name,
-                "content": f"Error: {e}"
-            })
+                # Add tool result to conversation
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
+                
+            except Exception as e:
+                print(f"❌ Tool call failed: {e}")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps({"error": str(e)})
+                })
+        
+        # Continue conversation - might trigger more tool calls
+        response = await client.complete(
+            model=self.model_name,
+            messages=messages,
+            tools=self.tool_registry.get_tool_definitions(),
+            tool_choice="auto"
+        )
+        
+        new_message = response.choices[0].message
+        
+        # Check for more tool calls
+        if hasattr(new_message, 'tool_calls') and new_message.tool_calls:
+            await self._handle_tool_calls(client, messages, new_message)
+        else:
+            print("📨 Assistant:", new_message.content)
 
 
 class FoundryAgentService:

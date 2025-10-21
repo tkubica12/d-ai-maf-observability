@@ -10,6 +10,7 @@ resource "random_uuid" "cognitive_services_user_role_id" {}
 resource "random_uuid" "cognitive_services_openai_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_openai_user_role_id" {}
+resource "random_uuid" "current_user_cognitive_services_contributor_role_id" {}
 
 # Role assignment for Azure AI Services access - Cognitive Services User
 resource "azapi_resource" "cognitive_services_user_role_assignment" {
@@ -71,6 +72,22 @@ resource "azapi_resource" "current_user_cognitive_services_openai_user_role" {
   body = {
     properties = {
       roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/5e0bd9bd-7b93-4f28-af87-19fc36ad61bd" # Cognitive Services OpenAI User
+      principalId      = var.current_user_object_id
+      principalType    = "User"
+    }
+  }
+}
+
+# Additional role assignment for MaaS access - Cognitive Services Contributor
+resource "azapi_resource" "current_user_cognitive_services_contributor_role" {
+  count     = var.current_user_object_id != null ? 1 : 0
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.current_user_cognitive_services_contributor_role_id.result
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68" # Cognitive Services Contributor
       principalId      = var.current_user_object_id
       principalType    = "User"
     }
