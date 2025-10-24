@@ -22,6 +22,23 @@ resource "helm_release" "maf_demo" {
           tag        = var.mcp_tool_image_tag
         }
       }
+      agent = {
+        image = {
+          repository = "${azapi_resource.acr.output.properties.loginServer}/agent"
+          tag        = var.agent_image_tag
+        }
+        clientId = azapi_resource.user_assigned_identity.output.properties.clientId
+        tenantId = azapi_resource.user_assigned_identity.output.properties.tenantId
+        # AI endpoint for local-maf scenario (Azure OpenAI format)
+        aiEndpoint = azapi_resource.ai_services.output.properties.endpoints["Azure OpenAI Legacy API - Latest moniker"]
+        # Project endpoint for maf-with-fas scenario (Foundry Agent Service)
+        projectEndpoint = azapi_resource.ai_project.output.properties.endpoints["AI Foundry API"]
+        modelName       = var.ai_model_name
+        modelDeployment = var.ai_model_name
+        # API and MCP server URLs from ingress configuration
+        apiServerUrl = "https://api-tool.${var.base_domain}"
+        mcpServerUrl = "https://mcp-tool.${var.base_domain}"
+      }
       ingress = {
         hosts = {
           api = {
@@ -29,6 +46,9 @@ resource "helm_release" "maf_demo" {
           }
           mcp = {
             host = "mcp-tool.${var.base_domain}"
+          }
+          aspire = {
+            host = "aspire.${var.base_domain}"
           }
         }
         tls = [
@@ -39,6 +59,10 @@ resource "helm_release" "maf_demo" {
           {
             secretName = "mcp-tool-tls"
             hosts      = ["mcp-tool.${var.base_domain}"]
+          },
+          {
+            secretName = "aspire-dashboard-tls"
+            hosts      = ["aspire.${var.base_domain}"]
           }
         ]
       }

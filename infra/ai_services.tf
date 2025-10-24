@@ -55,8 +55,8 @@ resource "azapi_resource" "ai_project" {
       type = "SystemAssigned"
     }
     properties = {
-      description   = "MAF Observability AI Project"
-      displayName   = "MAF Observability Project"
+      description = "MAF Observability AI Project"
+      displayName = "MAF Observability Project"
     }
   }
 

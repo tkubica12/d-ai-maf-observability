@@ -33,6 +33,16 @@ output "ai_services_endpoint" {
   value       = azapi_resource.ai_services.output.properties.endpoint
 }
 
+output "ai_foundry_endpoint" {
+  description = "Azure AI Foundry API endpoint for model inference"
+  value       = azapi_resource.ai_services.output.properties.endpoints["AI Foundry API"]
+}
+
+output "ai_project_endpoint" {
+  description = "Azure AI Project endpoint for Foundry Agent Service"
+  value       = azapi_resource.ai_project.output.properties.endpoints["AI Foundry API"]
+}
+
 output "ai_services_name" {
   description = "Name of the Azure AI Services account"
   value       = azapi_resource.ai_services.name
@@ -113,4 +123,9 @@ output "api_tool_url" {
 output "mcp_tool_url" {
   description = "URL for the MCP tool service"
   value       = "https://mcp-tool.${var.base_domain}"
+}
+
+output "aspire_dashboard_url" {
+  description = "URL for the Aspire Dashboard (OpenTelemetry UI)"
+  value       = "https://aspire.${var.base_domain}"
 }

@@ -5,9 +5,27 @@ resource "azapi_resource" "user_assigned_identity" {
   parent_id = azapi_resource.rg.id
 }
 
+# Federated credential for agent workload identity in AKS
+resource "azapi_resource" "agent_federated_credential" {
+  type      = "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31"
+  name      = "agent-federated-credential"
+  parent_id = azapi_resource.user_assigned_identity.id
+
+  body = {
+    properties = {
+      audiences = ["api://AzureADTokenExchange"]
+      issuer    = azapi_resource.aks.output.properties.oidcIssuerProfile.issuerURL
+      subject   = "system:serviceaccount:maf-demo:maf-demo-agent"
+    }
+  }
+
+  depends_on = [azapi_resource.aks]
+}
+
 # Generate UUIDs for role assignments
 resource "random_uuid" "cognitive_services_user_role_id" {}
 resource "random_uuid" "cognitive_services_openai_user_role_id" {}
+resource "random_uuid" "ai_project_contributor_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_openai_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_contributor_role_id" {}
@@ -46,6 +64,26 @@ resource "azapi_resource" "cognitive_services_openai_user_role_assignment" {
   }
 
   depends_on = [azapi_resource.user_assigned_identity]
+}
+
+# Role assignment for Azure AI Project access - Contributor role on the project
+resource "azapi_resource" "ai_project_contributor_role_assignment" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.ai_project_contributor_role_id.result
+  parent_id = azapi_resource.ai_project.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c" # Contributor
+      principalId      = azapi_resource.user_assigned_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
+    }
+  }
+
+  depends_on = [
+    azapi_resource.user_assigned_identity,
+    azapi_resource.ai_project
+  ]
 }
 
 # Role assignment for current user - needed for development

@@ -60,4 +60,35 @@ spec:
                 port:
                   number: {{ $.Values.service.mcpPort }}
           {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.aspire.host }}
+      secretName: {{ (index .Values.ingress.tls 2).secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.hosts.aspire.host }}
+      http:
+        paths:
+          {{- range .Values.ingress.hosts.aspire.paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "maf-demo.fullname" $ }}-aspire-dashboard
+                port:
+                  number: 18888
+          {{- end }}
 {{- end }}

@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-agent
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+  annotations:
+    azure.workload.identity/client-id: {{ .Values.agent.clientId | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-agent
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: {{ .Values.agent.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "maf-demo.agentSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "maf-demo.agentSelectorLabels" . | nindent 8 }}
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: {{ include "maf-demo.fullname" . }}-agent
+      containers:
+        - name: agent
+          image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+          env:
+            # Azure authentication (workload identity)
+            {{- if .Values.agent.tenantId }}
+            - name: AZURE_TENANT_ID
+              value: {{ .Values.agent.tenantId | quote }}
+            {{- end }}
+            {{- if .Values.agent.clientId }}
+            - name: AZURE_CLIENT_ID
+              value: {{ .Values.agent.clientId | quote }}
+            {{- end }}
+            # Service URLs
+            {{- if .Values.agent.apiServerUrl }}
+            - name: API_SERVER_URL
+              value: {{ .Values.agent.apiServerUrl | quote }}
+            {{- else }}
+            - name: API_SERVER_URL
+              value: "http://{{ include "maf-demo.fullname" . }}-api-tool:{{ .Values.service.apiPort }}"
+            {{- end }}
+            {{- if .Values.agent.mcpServerUrl }}
+            - name: MCP_SERVER_URL
+              value: {{ .Values.agent.mcpServerUrl | quote }}
+            {{- else }}
+            - name: MCP_SERVER_URL
+              value: "http://{{ include "maf-demo.fullname" . }}-mcp-tool:{{ .Values.service.mcpPort }}"
+            {{- end }}
+            # OpenTelemetry configuration
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://{{ include "maf-demo.fullname" . }}-otel-collector:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "agent"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=agent,service.namespace=maf-demo"
+            - name: ENABLE_SENSITIVE_DATA
+              value: "true"
+            # Azure AI configuration
+            {{- if .Values.agent.aiEndpoint }}
+            - name: AI_ENDPOINT
+              value: {{ .Values.agent.aiEndpoint | quote }}
+            {{- end }}
+            {{- if .Values.agent.projectEndpoint }}
+            - name: PROJECT_ENDPOINT
+              value: {{ .Values.agent.projectEndpoint | quote }}
+            {{- end }}
+            {{- if .Values.agent.modelName }}
+            - name: MODEL_NAME
+              value: {{ .Values.agent.modelName | quote }}
+            {{- end }}
+            {{- if .Values.agent.modelDeployment }}
+            - name: MODEL_DEPLOYMENT
+              value: {{ .Values.agent.modelDeployment | quote }}
+            {{- end }}

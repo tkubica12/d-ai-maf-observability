@@ -65,3 +65,27 @@ MCP Tool labels
 {{ include "maf-demo.selectorLabels" . }}
 app.kubernetes.io/component: mcp-tool
 {{- end }}
+
+{{/*
+OTEL Collector labels
+*/}}
+{{- define "maf-demo.otelCollectorSelectorLabels" -}}
+{{ include "maf-demo.selectorLabels" . }}
+app.kubernetes.io/component: otel-collector
+{{- end }}
+
+{{/*
+Aspire Dashboard labels
+*/}}
+{{- define "maf-demo.aspireDashboardSelectorLabels" -}}
+{{ include "maf-demo.selectorLabels" . }}
+app.kubernetes.io/component: aspire-dashboard
+{{- end }}
+
+{{/*
+Agent labels
+*/}}
+{{- define "maf-demo.agentSelectorLabels" -}}
+{{ include "maf-demo.selectorLabels" . }}
+app.kubernetes.io/component: agent
+{{- end }}

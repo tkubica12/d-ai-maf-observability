@@ -30,6 +30,49 @@ mcpTool:
       memory: "128Mi"
       cpu: "100m"
 
+agent:
+  image:
+    repository: ""  # Will be set via Terraform
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  clientId: ""  # Azure managed identity client ID for workload identity
+  tenantId: ""  # Azure tenant ID
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  # Azure AI configuration (set via Terraform)
+  aiEndpoint: ""       # AI Foundry API endpoint with /models path
+  projectEndpoint: ""  # Project endpoint for Foundry Agent Service
+  modelName: "gpt-4o"
+  modelDeployment: "gpt-4o"
+  # Service URLs (set via Terraform)
+  apiServerUrl: ""     # API server ingress URL
+  mcpServerUrl: ""     # MCP server ingress URL
+
+otelCollector:
+  tag: "0.115.1"
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+aspireDashboard:
+  tag: "9.0"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "1024Mi"
+      cpu: "700m"
+
 ingress:
   enabled: true
   className: "nginx"
@@ -46,10 +89,17 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    aspire:
+      host: ""  # Will be set via Terraform (aspire.{base_domain})
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
     - secretName: api-tool-tls
       hosts: []  # Will be set via Terraform
     - secretName: mcp-tool-tls
+      hosts: []  # Will be set via Terraform
+    - secretName: aspire-dashboard-tls
       hosts: []  # Will be set via Terraform
 
 service:

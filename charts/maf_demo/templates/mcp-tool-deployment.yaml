@@ -30,3 +30,9 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: "{{ .Values.mcpTool.containerPort }}"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://{{ include "maf-demo.fullname" . }}-otel-collector:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "mcp-tool"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=mcp-tool,service.namespace=maf-demo"

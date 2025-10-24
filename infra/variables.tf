@@ -196,3 +196,13 @@ variable "mcp_tool_image_tag" {
   EOT
   default     = "latest"
 }
+
+variable "agent_image_tag" {
+  type        = string
+  description = <<-EOT
+    Docker image tag for the MAF agent container.
+    Used for versioning and deployment control.
+    Example: "v1", "v2", "latest"
+  EOT
+  default     = "latest"
+}

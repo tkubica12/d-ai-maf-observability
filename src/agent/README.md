@@ -1,22 +1,32 @@
 # Agent
 
-Microsoft Agent Framework (MAF) agents with unified testing approach for Azure AI integration.
+Microsoft Agent Framework (MAF) agents demonstrating multiple observability scenarios.
 
-## Unified Agent Testing
+## Observability Scenarios
 
-The new `unified_agent.py` provides comprehensive testing of both MAF approaches in a single file:
+The `main.py` provides comprehensive testing of MAF scenarios with different deployment patterns:
 
-### Approach 1: Direct LLM Agent with Function Calling
-- Direct calls to Azure AI models via ChatCompletionsClient
-- Function calling for API tools (get product of the day)
-- MCP integration for stock lookup
-- Manual orchestration and conversation management
+### Implemented Scenarios
 
-### Approach 2: Foundry Agent Service with Registered Agent  
-- Complete agent lifecycle management through Azure AI Foundry
-- Agent registration, execution, and cleanup
-- Built-in tool integration and orchestration
+#### Scenario 1: Local Microsoft Agent Framework (`local-maf`)
+- Local agent using AzureOpenAIResponsesClient
+- Direct calls to Azure OpenAI endpoint
+- Function calling for API tools and MCP tools
+- Manual orchestration with full control
+- Use case: Development, testing, custom logic
+
+#### Scenario 2: MAF with Foundry Agent Service (`maf-with-fas`)
+- Agent lifecycle managed by Azure AI Foundry Agent Service
+- Uses AzureAIAgentClient for agent creation and execution
+- Same tool integration (API and MCP)
 - Managed conversation state and threading
+- Use case: Production deployments, enterprise scale
+
+### Planned Scenarios
+
+- **Scenario 3**: `local-maf-multiagent` - Local multi-agent collaboration
+- **Scenario 4**: `maf-with-fas-multiagent` - Foundry multi-agent orchestration
+- **Scenario 5**: `local-maf-with-fas-multiagent` - Hybrid multi-agent architecture
 
 ## Tool Integration
 
@@ -59,18 +69,17 @@ cp .env.example .env
 
 ## Running
 
-### Foundry Agent Service Variant
+Run all implemented scenarios:
 ```bash
-python main.py
+uv run main.py
 ```
 
-### Direct Model Access Variant
-```bash
-python main_direct.py
-```
+The agent will execute scenarios sequentially:
+1. local-maf (if AI_ENDPOINT configured)
+2. maf-with-fas (if PROJECT_ENDPOINT configured)
 
-### Simple Demo Mode (No Azure Required)
-If endpoints are not configured, agents run in demo mode showing expected behavior.
+### Simple Demo Mode
+If endpoints are not configured, scenarios are skipped with informative messages.
 
 ## Docker
 
@@ -83,13 +92,14 @@ docker run --env-file .env agent
 ## Configuration
 
 Environment variables:
-- `PROJECT_ENDPOINT` - Azure AI Foundry project endpoint (for Foundry variant)
-- `AI_ENDPOINT` - Direct Azure AI models endpoint (for Direct variant)
-- `MODEL_DEPLOYMENT` / `MODEL_NAME` - Model deployment name (default: gpt-4o)
+- `AI_ENDPOINT` - Azure OpenAI endpoint (for local-maf, e.g., https://<resource>.openai.azure.com)
+- `PROJECT_ENDPOINT` - Azure AI Foundry project endpoint (for maf-with-fas)
+- `MODEL_NAME` - Model deployment name for local-maf (default: gpt-4o)
+- `MODEL_DEPLOYMENT` - Model deployment name for maf-with-fas (default: gpt-4o)
+- `API_SERVER_URL` - API server URL (default: http://localhost:8000)
 - `MCP_SERVER_URL` - MCP server URL (default: http://localhost:8001)
-- `API_SERVER_URL` - API server URL for MCP (default: http://localhost:8000)
-- `HOST` - Server host (default: 0.0.0.0)
-- `PORT` - Server port (default: 8002)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OpenTelemetry collector endpoint (optional, e.g., http://localhost:4317)
+- `OTEL_SERVICE_NAME` - Service name for telemetry (default: agent)
 
 ## Authentication
 

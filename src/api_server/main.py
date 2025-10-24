@@ -2,7 +2,7 @@
 API Server that receives function calls from MCP server.
 
 This server provides a simple API endpoint that can be called through
-function calling from the MCP server.
+function calling from the MCP server. Instrumented with OpenTelemetry.
 """
 import os
 import random
@@ -13,7 +13,66 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configure OpenTelemetry before creating FastAPI app
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+# Custom span filter to exclude /health endpoint
+def health_endpoint_filter(span):
+    """Filter out /health endpoint from traces."""
+    if span.attributes:
+        # Check various possible attribute names for the URL path
+        http_target = (
+            span.attributes.get("http.target") 
+            or span.attributes.get("url.path")
+            or span.attributes.get("http.url")
+            or span.attributes.get("url.full")
+        )
+        if http_target and "/health" in str(http_target):
+            return False
+    return True
+
+# Configure OpenTelemetry
+resource = Resource(attributes={
+    SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "api-server")
+})
+
+trace.set_tracer_provider(TracerProvider(resource=resource))
+tracer_provider = trace.get_tracer_provider()
+
+# Add OTLP exporter with filter
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+
+# Wrap processor with filtering
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+class FilteringSpanProcessor(BatchSpanProcessor):
+    """Span processor that filters spans based on a predicate."""
+    def __init__(self, span_exporter, span_filter=None, **kwargs):
+        super().__init__(span_exporter, **kwargs)
+        self._span_filter = span_filter or (lambda span: True)
+    
+    def on_end(self, span):
+        if self._span_filter(span):
+            super().on_end(span)
+
+tracer_provider.add_span_processor(
+    FilteringSpanProcessor(otlp_exporter, span_filter=health_endpoint_filter)
+)
+
+print(f"🔭 OpenTelemetry configured: {otlp_endpoint}")
+print(f"   Service: {os.getenv('OTEL_SERVICE_NAME', 'api-server')}")
+
+# Create FastAPI app
 app = FastAPI(title="API Server", version="0.1.0")
+
+# Instrument FastAPI with OpenTelemetry
+FastAPIInstrumentor.instrument_app(app)
 
 # Add CORS middleware
 app.add_middleware(

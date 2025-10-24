@@ -9,4 +9,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "uvicorn>=0.30.0",
     "fastapi>=0.100.0",
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
 ]

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "maf-demo.aspireDashboardSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "maf-demo.aspireDashboardSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: aspire-dashboard
+        image: mcr.microsoft.com/dotnet/aspire-dashboard:{{ .Values.aspireDashboard.tag }}
+        ports:
+        - containerPort: 18888  # Dashboard UI
+          name: http
+          protocol: TCP
+        - containerPort: 18889  # OTLP gRPC
+          name: otlp-grpc
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:18888"
+        - name: DOTNET_DASHBOARD_OTLP_ENDPOINT_URL
+          value: "http://+:18889"
+        - name: DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS
+          value: "true"
+        resources:
+          {{- toYaml .Values.aspireDashboard.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - port: 18888
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 18889
+      targetPort: otlp-grpc
+      protocol: TCP
+      name: otlp-grpc
+  selector:
+    {{- include "maf-demo.aspireDashboardSelectorLabels" . | nindent 4 }}

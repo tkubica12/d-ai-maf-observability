@@ -13,6 +13,7 @@ import subprocess
 import json
 from pathlib import Path
 from typing import Dict, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     from dotenv import load_dotenv
@@ -116,7 +117,8 @@ def read_current_versions(tfvars_file: Path) -> Dict[str, str]:
     """
     versions = {
         "api_tool_image_tag": "v1",
-        "mcp_tool_image_tag": "v1"
+        "mcp_tool_image_tag": "v1",
+        "agent_image_tag": "v1"
     }
     
     if tfvars_file.exists():
@@ -135,8 +137,14 @@ def read_current_versions(tfvars_file: Path) -> Dict[str, str]:
             if mcp_match:
                 versions["mcp_tool_image_tag"] = mcp_match.group(1)
             
+            # Extract Agent version
+            agent_match = re.search(r'agent_image_tag\s*=\s*"([^"]+)"', content)
+            if agent_match:
+                versions["agent_image_tag"] = agent_match.group(1)
+            
             print_colored(f"Current API tool version: {versions['api_tool_image_tag']}", Colors.CYAN)
             print_colored(f"Current MCP tool version: {versions['mcp_tool_image_tag']}", Colors.CYAN)
+            print_colored(f"Current Agent version: {versions['agent_image_tag']}", Colors.CYAN)
             
         except Exception as e:
             print_error(f"Failed to read versions file: {e}")
@@ -146,7 +154,7 @@ def read_current_versions(tfvars_file: Path) -> Dict[str, str]:
     return versions
 
 
-def write_new_versions(tfvars_file: Path, api_version: str, mcp_version: str) -> None:
+def write_new_versions(tfvars_file: Path, api_version: str, mcp_version: str, agent_version: str) -> None:
     """
     Write new image versions to the Terraform variables file.
     
@@ -154,14 +162,17 @@ def write_new_versions(tfvars_file: Path, api_version: str, mcp_version: str) ->
         tfvars_file: Path to the images.auto.tfvars file
         api_version: New API tool version
         mcp_version: New MCP tool version
+        agent_version: New Agent version
     """
     content = f'''api_tool_image_tag = "{api_version}"
 mcp_tool_image_tag = "{mcp_version}"
+agent_image_tag = "{agent_version}"
 '''
     
     print_warning(f"Writing new versions to {tfvars_file}")
     print_colored(f"  API tool version: {api_version}", Colors.CYAN)
     print_colored(f"  MCP tool version: {mcp_version}", Colors.CYAN)
+    print_colored(f"  Agent version: {agent_version}", Colors.CYAN)
     
     try:
         tfvars_file.write_text(content, encoding='utf-8')
@@ -170,7 +181,7 @@ mcp_tool_image_tag = "{mcp_version}"
 
 
 def build_acr_image(image_name: str, tag: str, source_path: Path, 
-                   resource_group: str, registry: str) -> bool:
+                   resource_group: str, registry: str) -> Tuple[bool, str]:
     """
     Build an image using ACR remote build task.
     
@@ -182,7 +193,7 @@ def build_acr_image(image_name: str, tag: str, source_path: Path,
         registry: ACR registry name
         
     Returns:
-        True if build was successful, False otherwise
+        Tuple of (success: bool, image_name: str)
     """
     print_info(f"Building {image_name}:{tag} using ACR remote build...")
     print_colored(f"Source path: {source_path}", Colors.GRAY)
@@ -200,10 +211,10 @@ def build_acr_image(image_name: str, tag: str, source_path: Path,
     
     if success:
         print_success(f"Successfully built {image_name}:{tag}")
-        return True
+        return True, image_name
     else:
         print_error(f"Failed to build {image_name}:{tag}. Error: {output}")
-        return False
+        return False, image_name
 
 
 def check_azure_cli() -> None:
@@ -289,6 +300,7 @@ def main():
     images_vars_file = terraform_dir / "images.auto.tfvars"
     api_source_dir = root_dir / "src" / "api_server"
     mcp_source_dir = root_dir / "src" / "mcp_server"
+    agent_source_dir = root_dir / "src" / "agent"
     
     print_info("Starting build and push process...")
     print_colored(f"Resource Group: {resource_group}", Colors.CYAN)
@@ -302,33 +314,60 @@ def main():
     current_versions = read_current_versions(images_vars_file)
     new_api_version = get_next_version(current_versions["api_tool_image_tag"])
     new_mcp_version = get_next_version(current_versions["mcp_tool_image_tag"])
+    new_agent_version = get_next_version(current_versions["agent_image_tag"])
     
     print()
     print_colored("🏷️  Version Update Plan:", Colors.MAGENTA)
     print_colored(f"  API tool: {current_versions['api_tool_image_tag']} → {new_api_version}", Colors.CYAN)
     print_colored(f"  MCP tool: {current_versions['mcp_tool_image_tag']} → {new_mcp_version}", Colors.CYAN)
+    print_colored(f"  Agent: {current_versions['agent_image_tag']} → {new_agent_version}", Colors.CYAN)
     print()
     
-    # Build API tool image
-    api_success = build_acr_image(
-        "api-tool", new_api_version, api_source_dir, 
-        resource_group, acr_name
-    )
+    # Build all images in parallel using ThreadPoolExecutor
+    print_info("Building all images in parallel...")
+    print()
     
-    if not api_success:
-        print_error("Failed to build API tool image")
+    build_tasks = [
+        ("api-tool", new_api_version, api_source_dir),
+        ("mcp-tool", new_mcp_version, mcp_source_dir),
+        ("agent", new_agent_version, agent_source_dir)
+    ]
     
-    # Build MCP tool image
-    mcp_success = build_acr_image(
-        "mcp-tool", new_mcp_version, mcp_source_dir,
-        resource_group, acr_name
-    )
+    failed_builds = []
     
-    if not mcp_success:
-        print_error("Failed to build MCP tool image")
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit all build tasks
+        future_to_image = {
+            executor.submit(
+                build_acr_image,
+                image_name,
+                tag,
+                source_path,
+                resource_group,
+                acr_name
+            ): image_name
+            for image_name, tag, source_path in build_tasks
+        }
+        
+        # Wait for all builds to complete
+        for future in as_completed(future_to_image):
+            image_name = future_to_image[future]
+            try:
+                success, built_image = future.result()
+                if not success:
+                    failed_builds.append(built_image)
+            except Exception as e:
+                print_error(f"Build task for {image_name} raised an exception: {e}")
+                failed_builds.append(image_name)
+    
+    print()
+    
+    # Check if any builds failed
+    if failed_builds:
+        print_error(f"Failed to build images: {', '.join(failed_builds)}")
     
     # Update the tfvars file with new versions
-    write_new_versions(images_vars_file, new_api_version, new_mcp_version)
+    write_new_versions(images_vars_file, new_api_version, new_mcp_version, new_agent_version)
     
     print()
     print_success("Build and push completed successfully!")

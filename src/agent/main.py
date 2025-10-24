@@ -1,499 +1,495 @@
 """
-Unified MAF Agent demonstrating two approaches:
-1. Direct LLM calls with function calling for API tools and MCP integration
-2. Foundry Agent Service with registered agent lifecycle
+Unified MAF Agent demonstrating multiple observability scenarios.
+
+Implemented Scenarios:
+1. local-maf: Local Microsoft Agent Framework with API and MCP tools
+2. maf-with-fas: Microsoft Agent Framework with Foundry Agent Service and API and MCP tools
+
+Planned Scenarios:
+3. local-maf-multiagent: Local Microsoft Agent Framework multi-agent with API and MCP tools
+4. maf-with-fas-multiagent: MAF with Foundry Agent Service multi-agent and API and MCP tools
+5. local-maf-with-fas-multiagent: MAF with mix of local and Foundry Agent Service multi-agent
 
 This agent demonstrates:
 - API function calling to get product of the day
 - MCP tool integration for stock lookup
-- Sequential testing of both approaches
+- Sequential testing of scenarios
 - Network-based tool integration
+- OpenTelemetry instrumentation with message content logging
 """
-import os
+from __future__ import annotations
+
 import asyncio
-import sys
-import httpx
+import inspect
 import json
-from typing import List, Dict, Any
+import os
+import random
+import sys
+from typing import Any, Callable, Dict, List, Optional, Type
+import uuid
+
+import httpx
 from dotenv import load_dotenv
-from azure.ai.inference.aio import ChatCompletionsClient
-from azure.ai.projects.aio import AIProjectClient
-from azure.identity.aio import DefaultAzureCredential
 from fastmcp import Client
+from pydantic import BaseModel, Field, create_model
+
+from agent_framework import ChatAgent, ai_function
+from agent_framework.azure import AzureAIAgentClient, AzureOpenAIResponsesClient
+from agent_framework.observability import get_tracer, setup_observability
+from azure.identity import DefaultAzureCredential
+from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
 
 load_dotenv()
 
+# Mock user data for observability demo (as per DESIGN.md)
+MOCK_USERS = [
+    {"user_id": "user_001", "is_vip": True, "department": "Engineering"},
+    {"user_id": "user_002", "is_vip": True, "department": "Marketing"},
+    {"user_id": "user_003", "is_vip": True, "department": "Engineering"},
+    {"user_id": "user_004", "is_vip": False, "department": "Marketing"},
+    {"user_id": "user_005", "is_vip": False, "department": "Engineering"},
+]
+
+def get_mock_user_context() -> Dict[str, Any]:
+    """Generate mock user context for observability dimensions."""
+    user = random.choice(MOCK_USERS)
+    return {
+        "user_id": user["user_id"],
+        "is_vip": user["is_vip"],
+        "department": user["department"],
+        "thread_id": f"thread_{uuid.uuid4().hex[:8]}",
+    }
+
+# Configure OpenTelemetry only if endpoint is configured
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+if otlp_endpoint:
+    # Enable sensitive data logging (prompts, completions) if configured
+    enable_sensitive = os.getenv("ENABLE_SENSITIVE_DATA", "true").lower() in ("true", "1", "yes")
+    setup_observability(
+        enable_sensitive_data=enable_sensitive,
+        otlp_endpoint=otlp_endpoint,
+    )
+    tracer = get_tracer(__name__)
+    print(f"🔭 OpenTelemetry configured: {otlp_endpoint}")
+    print(f"   Service: {os.getenv('OTEL_SERVICE_NAME', 'agent')}")
+    print(f"   Sensitive data logging: {'Enabled' if enable_sensitive else 'Disabled'}")
+else:
+    print("⚠️  OpenTelemetry disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set)")
+    tracer = None
+
 
 class ToolRegistry:
-    """Registry for managing both API and MCP tools."""
-    
-    def __init__(self, api_server_url: str, mcp_server_url: str):
-        self.api_server_url = api_server_url
-        self.mcp_server_url = mcp_server_url
-        self.mcp_tools = []
-    
+    """Registry for managing both API and MCP tools via Agent Framework-compatible callables."""
+
+    def __init__(self, api_server_url: str, mcp_server_url: str) -> None:
+        self.api_server_url = api_server_url.rstrip("/")
+        self.mcp_server_url = mcp_server_url.rstrip("/")
+        self.mcp_tools: List[Any] = []
+
     async def test_connections(self) -> bool:
-        """Test connections to both API and MCP servers."""
+        """Test connections to both API and MCP servers and cache MCP tool metadata."""
         api_ok = False
         mcp_ok = False
-        
-        # Test API server connection
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(f"{self.api_server_url}/health", timeout=5.0)
                 api_ok = response.status_code == 200
                 print(f"✅ API Server: {'Connected' if api_ok else 'Failed'}")
-            except Exception as e:
-                print(f"❌ API Server: {e}")
-        
-        # Test MCP server connection using FastMCP client
+            except Exception as exc:  # noqa: BLE001
+                print(f"❌ API Server: {exc}")
+
         try:
             async with Client(f"{self.mcp_server_url}/mcp") as mcp_client:
-                # Test connection and discover tools
-                tools = await mcp_client.list_tools()
-                self.mcp_tools = tools
+                self.mcp_tools = await mcp_client.list_tools()
                 mcp_ok = True
-                
-                print("✅ MCP Server: Connected")
-                print(f"🔧 Discovered {len(tools)} MCP tools:")
-                for tool in tools:
-                    print(f"   • {tool.name}: {tool.description}")
-                    if hasattr(tool, 'inputSchema') and tool.inputSchema:
-                        props = tool.inputSchema.get('properties', {})
-                        if props:
-                            params = ', '.join(props.keys())
-                            print(f"     Parameters: {params}")
-                
-        except Exception as e:
-            print(f"❌ MCP Server: {e}")
-            # Fallback to basic HTTP test
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(f"{self.mcp_server_url}/", timeout=5.0)
-                    if response.status_code != 200:
-                        response = await client.get(f"{self.mcp_server_url}/tools", timeout=5.0)
-                    mcp_ok = response.status_code == 200
-                    if mcp_ok:
-                        print("✅ MCP Server: Connected (HTTP fallback - tool discovery unavailable)")
-            except Exception as fallback_e:
-                print(f"❌ MCP Server: {fallback_e}")
-        
+
+            print("✅ MCP Server: Connected")
+            print(f"🔧 Discovered {len(self.mcp_tools)} MCP tools:")
+            for tool in self.mcp_tools:
+                description = getattr(tool, "description", "").strip()
+                print(f"   • {tool.name}: {description or 'No description provided'}")
+                schema = getattr(tool, "inputSchema", None) or {}
+                props = schema.get("properties", {})
+                if props:
+                    params = ", ".join(props.keys())
+                    print(f"     Parameters: {params}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"❌ MCP Server: {exc}")
+            mcp_ok = False
+
         return api_ok and mcp_ok
-    
-    def get_tool_definitions(self) -> List[Dict[str, Any]]:
-        """Get Azure AI Inference tool definitions for direct LLM calls."""
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_product_of_the_day",
-                    "description": "Get a randomly selected product of the day from the API server",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
-            }
-        ]
-        
-        # Add discovered MCP tools
-        for tool in self.mcp_tools:
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema if hasattr(tool, 'inputSchema') and tool.inputSchema else {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
-            })
-        
+
+    def get_agent_tools(self) -> List[Callable[..., Any]]:
+        """Return Agent Framework tool callables (API + discovered MCP tools)."""
+        tools: List[Callable[..., Any]] = [self._build_api_tool()]
+        tools.extend(self._build_mcp_tool_functions())
         return tools
-    
-    async def call_function(self, function_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a function call."""
-        if function_name == "get_product_of_the_day":
-            return await self._call_api_product_of_the_day()
-        elif function_name in [tool.name for tool in self.mcp_tools]:
-            return await self._call_mcp_tool(function_name, arguments)
-        else:
-            raise ValueError(f"Unknown function: {function_name}")
-    
+
+    def _build_api_tool(self) -> Callable[[], Any]:
+        registry = self
+
+        @ai_function(
+            name="get_product_of_the_day",
+            description="Get a randomly selected product of the day from the API server",
+        )
+        async def get_product_of_the_day() -> Dict[str, Any]:
+            registry._log_tool_call("get_product_of_the_day", {})
+            result = await registry._call_api_product_of_the_day()
+            registry._log_tool_result("get_product_of_the_day", result)
+            return result
+
+        return get_product_of_the_day
+
+    def _build_mcp_tool_functions(self) -> List[Callable[..., Any]]:
+        functions: List[Callable[..., Any]] = []
+        for tool in self.mcp_tools:
+            functions.append(self._create_mcp_tool_callable(tool))
+        return functions
+
+    def _create_mcp_tool_callable(self, tool: Any) -> Callable[..., Any]:
+        tool_name = tool.name
+        tool_description = getattr(tool, "description", "") or ""
+        schema = getattr(tool, "inputSchema", None) or {}
+        registry = self
+        
+        # For tools with parameters, create a function with named parameters
+        if schema.get("properties"):
+            params = schema.get("properties", {})
+            
+            # Create the function code dynamically with explicit parameter names
+            param_list = ", ".join(f"{name}: str" for name in params.keys())
+            
+            # Build the function using exec to get proper parameter names in signature
+            func_code = f"""
+async def call_tool({param_list}) -> Dict[str, Any]:
+    # Build arguments dict from named parameters
+    arguments = {{{", ".join(f'"{name}": {name}' for name in params.keys())}}}
+    registry._log_tool_call(tool_name, arguments)
+    result = await registry._call_mcp_tool(tool_name, arguments)
+    registry._log_tool_result(tool_name, result)
+    return result
+"""
+            # Create a namespace with the required variables
+            namespace = {
+                'Dict': Dict,
+                'Any': Any,
+                'tool_name': tool_name,
+                'registry': registry,
+            }
+            
+            # Execute the function definition
+            exec(func_code, namespace)
+            call_tool = namespace['call_tool']
+            
+            # Apply the ai_function decorator
+            decorated_tool = ai_function(name=tool_name, description=tool_description)(call_tool)
+            return decorated_tool
+        
+        # For tools without parameters
+        @ai_function(name=tool_name, description=tool_description)
+        async def call_tool() -> Dict[str, Any]:
+            registry._log_tool_call(tool_name, {})
+            result = await registry._call_mcp_tool(tool_name, {})
+            registry._log_tool_result(tool_name, result)
+            return result
+
+        return call_tool
+
+    def _log_tool_call(self, name: str, arguments: Dict[str, Any]) -> None:
+        print(f"🔧 Tool call: {name}({arguments})")
+
+    def _log_tool_result(self, name: str, result: Dict[str, Any]) -> None:
+        print(f"📥 Tool result ({name}): {result}")
+
     async def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Call any MCP tool using FastMCP client."""
-        try:
-            async with Client(f"{self.mcp_server_url}/mcp") as mcp_client:
-                result = await mcp_client.call_tool(tool_name, arguments)
-                # Handle different result formats
-                if hasattr(result, 'content') and result.content:
-                    if hasattr(result.content[0], 'text'):
-                        # Text result - try to parse as JSON, fallback to plain text
+        if tracer:
+            span = tracer.start_as_current_span("tool_registry.call_mcp_tool")
+        else:
+            from contextlib import nullcontext
+            span = nullcontext()
+            
+        with span as s:
+            if s:
+                s.set_attribute("tool.name", tool_name)
+                s.set_attribute("tool.arguments", json.dumps(arguments))
+
+            try:
+                async with Client(f"{self.mcp_server_url}/mcp") as mcp_client:
+                    result = await mcp_client.call_tool(tool_name, arguments)
+
+                if hasattr(result, "content") and result.content:
+                    first_item = result.content[0]
+                    if hasattr(first_item, "text") and first_item.text is not None:
                         try:
-                            return json.loads(result.content[0].text)
-                        except (json.JSONDecodeError, AttributeError):
-                            return {"result": result.content[0].text}
-                    else:
-                        return {"result": str(result.content[0])}
-                else:
-                    return {"result": str(result)}
-        except Exception as e:
-            print(f"⚠️ FastMCP call failed for {tool_name}, falling back to HTTP: {e}")
-            # Fallback to HTTP call for backward compatibility
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.mcp_server_url}/tools/{tool_name}",
-                    json={"arguments": arguments},
-                    timeout=10.0
-                )
-                if response.status_code == 200:
-                    result = response.json()
-                    return result.get("result", {})
-                else:
-                    raise Exception(f"MCP call failed: {response.status_code}")
-    
+                            parsed = json.loads(first_item.text)
+                        except (json.JSONDecodeError, TypeError):
+                            parsed = {"result": first_item.text}
+                        if s:
+                            s.set_attribute("tool.result", json.dumps(parsed)[:500])
+                        return parsed
+                    return {"result": str(first_item)}
+
+                parsed_result = {"result": str(result)}
+                if s:
+                    s.set_attribute("tool.result", json.dumps(parsed_result)[:500])
+                return parsed_result
+            except Exception as exc:  # noqa: BLE001
+                if s:
+                    s.record_exception(exc)
+                print(f"⚠️ MCP call failed for {tool_name}: {exc}")
+                raise
+
     async def _call_api_product_of_the_day(self) -> Dict[str, Any]:
-        """Call API server to get product of the day."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.api_server_url}/product-of-the-day", timeout=10.0)
-            if response.status_code == 200:
+        if tracer:
+            span = tracer.start_as_current_span("tool_registry.call_api_product")
+        else:
+            from contextlib import nullcontext
+            span = nullcontext()
+            
+        with span:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.api_server_url}/product-of-the-day",
+                    timeout=10.0,
+                )
+                response.raise_for_status()
                 return response.json()
-            else:
-                raise Exception(f"API call failed: {response.status_code}")
 
 
-class DirectLLMAgent:
-    """Agent using direct LLM calls with function calling."""
-    
-    def __init__(self, ai_endpoint: str, model_name: str, tool_registry: ToolRegistry):
+
+class LocalMAFAgent:
+    """Local Microsoft Agent Framework with API and MCP tools (local-maf)."""
+
+    def __init__(
+        self,
+        ai_endpoint: str,
+        model_name: str,
+        tool_registry: ToolRegistry,
+    ) -> None:
         self.ai_endpoint = ai_endpoint
         self.model_name = model_name
         self.tool_registry = tool_registry
-    
+
     async def run(self) -> None:
-        """Run the direct LLM agent approach."""
-        print("\n" + "="*80)
-        print("🔄 APPROACH 1: Direct LLM Agent with Function Calling")
-        print("="*80)
+        """Run local MAF agent with API and MCP tools."""
+        print("\n" + "=" * 80)
+        print("🔄 SCENARIO 1: Local Microsoft Agent Framework with API and MCP tools")
+        print("   Scenario ID: local-maf")
+        print("=" * 80)
+
+        # Generate mock user context
+        user_context = get_mock_user_context()
+        print(f"👤 User Context: {user_context['user_id']} (VIP: {user_context['is_vip']}, Dept: {user_context['department']})")
+        print(f"🧵 Thread ID: {user_context['thread_id']}")
+
+        credential = DefaultAzureCredential()
         
-        async with DefaultAzureCredential() as credential:
-            client = ChatCompletionsClient(
-                endpoint=self.ai_endpoint,
-                credential=credential,
-                credential_scopes=["https://cognitiveservices.azure.com/.default"],
-            )
-            
-            print("✅ Connected to Azure AI Models directly")
-            print(f"🤖 Using model: {self.model_name}")
-            
-            # System message
-            system_message = """You are a helpful assistant that can get product information and stock levels.
-            
-            Your task is to:
-            1. Get the product of the day
-            2. Use the product description in your response
-            3. Look up the stock level for that product using its product_id
-            4. Provide a comprehensive response including product details and availability
-            
-            Always use the available functions to get current data."""
-            
-            # User message
-            user_message = "What's the product of the day and is it in stock?"
-            print(f"\n📤 User: {user_message}")
-            
-            # Prepare messages with function definitions
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ]
-            
-            # First LLM call with tool definitions
-            print("\n🤖 Making initial LLM call with tool definitions...")
-            response = await client.complete(
-                model=self.model_name,
-                messages=messages,
-                tools=self.tool_registry.get_tool_definitions(),
-                tool_choice="auto"
-            )
-            
-            message = response.choices[0].message
-            
-            # Process tool calls
-            if hasattr(message, 'tool_calls') and message.tool_calls:
-                await self._handle_tool_calls(client, messages, message)
-            else:
-                print("📨 Assistant:", message.content)
-    
-    async def _handle_tool_calls(self, client, messages: List[Dict], message) -> None:
-        """Handle tool calls in the conversation."""
-        # Add the assistant message with tool calls to conversation
-        messages.append({
-            "role": "assistant",
-            "content": message.content,
-            "tool_calls": [
-                {
-                    "id": tool_call.id,
-                    "type": "function",
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
-                    }
-                } for tool_call in message.tool_calls
-            ]
-        })
-        
-        # Execute each tool call
-        for tool_call in message.tool_calls:
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            
-            print(f"🔧 Tool call: {function_name}({function_args})")
-            
-            try:
-                result = await self.tool_registry.call_function(function_name, function_args)
-                print(f"📥 Tool result: {result}")
-                
-                # Add tool result to conversation
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(result)
-                })
-                
-            except Exception as e:
-                print(f"❌ Tool call failed: {e}")
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps({"error": str(e)})
-                })
-        
-        # Continue conversation - might trigger more tool calls
-        response = await client.complete(
-            model=self.model_name,
-            messages=messages,
-            tools=self.tool_registry.get_tool_definitions(),
-            tool_choice="auto"
+        # Use AzureOpenAIResponsesClient for Azure OpenAI Responses API
+        # The endpoint should be the base Azure OpenAI endpoint (e.g., https://<resource>.openai.azure.com)
+        responses_client = AzureOpenAIResponsesClient(
+            endpoint=self.ai_endpoint,
+            deployment_name=self.model_name,
+            api_version="preview",  # Required for Responses API
+            credential=credential,
         )
+
+        print("✅ Connected to Azure OpenAI Responses API")
+        print(f"🤖 Using model: {self.model_name}")
+
+        tool_callables = self.tool_registry.get_agent_tools()
         
-        new_message = response.choices[0].message
+        # Create agent using the responses client's create_agent method
+        agent = responses_client.create_agent(
+            instructions="""You are a helpful assistant that can get product information and stock levels.
+
+Your task is to:
+1. Get the product of the day
+2. Use the product description in your response
+3. Look up the stock level for that product using its product_id
+4. Provide a comprehensive response including product details and availability
+
+Always use the available functions to get current data.""",
+            name="ProductInfoAgent",
+            tools=tool_callables,
+        )
+
+        user_message = "What's the product of the day and is it in stock?"
+        print(f"\n📤 User: {user_message}")
+
+        print("\n🤖 Making LLM call with Agent Framework (AzureOpenAIResponsesClient)...")
         
-        # Check for more tool calls
-        if hasattr(new_message, 'tool_calls') and new_message.tool_calls:
-            await self._handle_tool_calls(client, messages, new_message)
+        # Add custom dimensions to the span
+        if tracer:
+            with tracer.start_as_current_span("scenario.local-maf") as span:
+                # Add custom dimensions as per DESIGN.md
+                span.set_attribute("user_id", user_context["user_id"])
+                span.set_attribute("is_vip", user_context["is_vip"])
+                span.set_attribute("department", user_context["department"])
+                span.set_attribute("thread_id", user_context["thread_id"])
+                span.set_attribute("scenario_id", "local-maf")
+                span.set_attribute("scenario_type", "single-agent")
+                
+                response = await agent.run(user_message)
         else:
-            print("📨 Assistant:", new_message.content)
+            response = await agent.run(user_message)
+
+        # Extract text from response
+        if hasattr(response, "text"):
+            final_text = response.text
+        elif hasattr(response, "content"):
+            final_text = response.content
+        else:
+            final_text = str(response)
+
+        print(f"\n📨 Assistant: {final_text}")
 
 
-class FoundryAgentService:
-    """Agent using Foundry Agent Service with registered lifecycle."""
-    
-    def __init__(self, project_endpoint: str, model_deployment: str, tool_registry: ToolRegistry):
+class MAFWithFASAgent:
+    """Microsoft Agent Framework with Foundry Agent Service and API and MCP tools (maf-with-fas)."""
+
+    def __init__(
+        self,
+        project_endpoint: str,
+        model_deployment: str,
+        tool_registry: ToolRegistry,
+    ) -> None:
         self.project_endpoint = project_endpoint
         self.model_deployment = model_deployment
         self.tool_registry = tool_registry
-    
+
     async def run(self) -> None:
-        """Run the Foundry Agent Service approach."""
-        print("\n" + "="*80)
-        print("🔄 APPROACH 2: Foundry Agent Service with Registered Agent")
-        print("="*80)
-        
-        async with DefaultAzureCredential() as credential:
-            async with AIProjectClient(
-                endpoint=self.project_endpoint,
-                credential=credential
-            ) as project_client:
-                
-                print("✅ Connected to Azure AI Project")
-                print(f"🤖 Creating agent with model: {self.model_deployment}")
-                
-                # Create agent with comprehensive instructions and dynamic tools
-                tools = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "get_product_of_the_day",
-                            "description": "Get a randomly selected product of the day from the API server",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {},
-                                "required": []
-                            }
-                        }
-                    }
-                ]
-                
-                # Add discovered MCP tools
-                for mcp_tool in self.tool_registry.mcp_tools:
-                    tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": mcp_tool.name,
-                            "description": mcp_tool.description,
-                            "parameters": mcp_tool.inputSchema if hasattr(mcp_tool, 'inputSchema') and mcp_tool.inputSchema else {
-                                "type": "object",
-                                "properties": {},
-                                "required": []
-                            }
-                        }
-                    })
-                
-                agent = await project_client.agents.create_agent(
-                    model=self.model_deployment,
-                    name="Product Info Agent",
-                    instructions=f"""You are a helpful assistant that provides product information and stock levels.
+        """Run MAF with Foundry Agent Service and API and MCP tools."""
+        print("\n" + "=" * 80)
+        print("🔄 SCENARIO 2: Microsoft Agent Framework with Foundry Agent Service")
+        print("   Scenario ID: maf-with-fas")
+        print("=" * 80)
+
+        # Generate mock user context
+        user_context = get_mock_user_context()
+        print(f"👤 User Context: {user_context['user_id']} (VIP: {user_context['is_vip']}, Dept: {user_context['department']})")
+        print(f"🧵 Thread ID: {user_context['thread_id']}")
+
+        # AzureAIAgentClient requires async credential
+        async with AsyncDefaultAzureCredential() as credential:
+            agent_client = AzureAIAgentClient(
+                project_endpoint=self.project_endpoint,
+                model_deployment_name=self.model_deployment,
+                async_credential=credential,
+            )
+
+            print("✅ Connected to Azure AI Project")
+            print(f"🤖 Using model: {self.model_deployment}")
+
+            tool_callables = self.tool_registry.get_agent_tools()
+            tool_names = ", ".join(
+                t.__name__ if hasattr(t, "__name__") else str(t) for t in tool_callables
+            )
+
+            instructions = f"""You are a helpful assistant that provides product information and stock levels.
 
 Your task is to:
 1. Get the product of the day from the API
-2. Use the product description in your response  
+2. Use the product description in your response
 3. Look up the stock level for that product using its product_id via MCP
 4. Provide a comprehensive response including product details and availability
 
-You have access to these tools:
-- get_product_of_the_day: Gets today's featured product from the API server
-{chr(10).join([f"- {tool.name}: {tool.description}" for tool in self.tool_registry.mcp_tools])}
+You have access to these tools: {tool_names}
 
-Always use both API and MCP tools to provide complete information.""",
-                    tools=tools
-                )
-                print(f"✅ Agent created: {agent.id}")
+Always use both API and MCP tools to provide complete information."""
+
+            # Use agent as context manager to properly close sessions
+            async with agent_client.create_agent(
+                name="Product Info Agent",
+                instructions=instructions,
+                tools=tool_callables,
+            ) as agent:
+                print(f"✅ Agent created (using Foundry Agent Service)")
+
+                user_message = "What's the product of the day and is it in stock?"
+                print(f"\n📤 User: {user_message}")
+
+                print("\n🤖 Agent processing...")
                 
-                try:
-                    # Create thread
-                    thread = await project_client.agents.threads.create()
-                    print(f"✅ Thread created: {thread.id}")
-                    
-                    # Send user message
-                    user_message = "What's the product of the day and is it in stock?"
-                    print(f"\n📤 User: {user_message}")
-                    
-                    await project_client.agents.messages.create(
-                        thread_id=thread.id,
-                        role="user",
-                        content=user_message
-                    )
-                    
-                    # Run agent
-                    print("\n🤖 Agent processing...")
-                    run = await project_client.agents.runs.create(
-                        thread_id=thread.id,
-                        agent_id=agent.id
-                    )
-                    
-                    # Wait for completion and handle tool calls
-                    while run.status in ["queued", "in_progress", "requires_action"]:
-                        await asyncio.sleep(1)
-                        run = await project_client.agents.runs.get(
-                            thread_id=thread.id,
-                            run_id=run.id
-                        )
+                # Add custom dimensions to the span
+                if tracer:
+                    with tracer.start_as_current_span("scenario.maf-with-fas") as span:
+                        # Add custom dimensions as per DESIGN.md
+                        span.set_attribute("user_id", user_context["user_id"])
+                        span.set_attribute("is_vip", user_context["is_vip"])
+                        span.set_attribute("department", user_context["department"])
+                        span.set_attribute("thread_id", user_context["thread_id"])
+                        span.set_attribute("scenario_id", "maf-with-fas")
+                        span.set_attribute("scenario_type", "single-agent")
                         
-                        if run.status == "requires_action":
-                            print("🔧 Agent requesting tool calls...")
-                            await self._handle_required_actions(project_client, thread.id, run.id, run.required_action)
-                    
-                    # Get final messages
-                    messages = project_client.agents.messages.list(thread_id=thread.id)
-                    print("\n📨 Agent response:")
-                    async for msg in messages:
-                        if msg.role == "assistant":
-                            for content in msg.content:
-                                if hasattr(content, 'text') and content.text:
-                                    print(f"   {content.text.value}")
-                
-                finally:
-                    # Cleanup
-                    print(f"\n🧹 Cleaning up agent {agent.id}...")
-                    await project_client.agents.delete_agent(agent.id)
-                    print("✅ Agent deleted")
-    
-    async def _handle_required_actions(self, project_client, thread_id: str, run_id: str, required_action) -> None:
-        """Handle required actions (tool calls) from the agent."""
-        tool_outputs = []
-        
-        for tool_call in required_action.submit_tool_outputs.tool_calls:
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            
-            print(f"   🔧 Calling: {function_name}({function_args})")
-            
-            try:
-                result = await self.tool_registry.call_function(function_name, function_args)
-                print(f"   📥 Result: {result}")
-                
-                tool_outputs.append({
-                    "tool_call_id": tool_call.id,
-                    "output": json.dumps(result)
-                })
-            except Exception as e:
-                print(f"   ❌ Error: {e}")
-                tool_outputs.append({
-                    "tool_call_id": tool_call.id,
-                    "output": json.dumps({"error": str(e)})
-                })
-        
-        # Submit tool outputs
-        await project_client.agents.runs.submit_tool_outputs(
-            thread_id=thread_id,
-            run_id=run_id,
-            tool_outputs=tool_outputs
-        )
+                        # Set store=True for service-managed threads to avoid warning
+                        response = await agent.run(user_message, store=True)
+                else:
+                    # Set store=True for service-managed threads to avoid warning
+                    response = await agent.run(user_message, store=True)
+
+                # Extract text from response
+                if hasattr(response, "text"):
+                    final_text = response.text
+                elif hasattr(response, "content"):
+                    final_text = response.content
+                else:
+                    final_text = str(response)
+
+                print(f"\n📨 Assistant: {final_text}")
 
 
-async def main():
+async def main() -> None:
     """Main entry point for unified agent testing."""
     print("🚀 Starting Unified MAF Agent Testing")
-    print("="*80)
-    
-    # Configuration
+    print("=" * 80)
+
     ai_endpoint = os.getenv("AI_ENDPOINT")
-    project_endpoint = os.getenv("PROJECT_ENDPOINT") 
-    model_name = os.getenv("MODEL_NAME", "gpt-4o")
-    model_deployment = os.getenv("MODEL_DEPLOYMENT", "gpt-4o")
+    project_endpoint = os.getenv("PROJECT_ENDPOINT")
+    model_name = os.getenv("MODEL_NAME", "gpt-5-nano")
+    model_deployment = os.getenv("MODEL_DEPLOYMENT", "gpt-5-nano")
     api_server_url = os.getenv("API_SERVER_URL", "http://localhost:8000")
     mcp_server_url = os.getenv("MCP_SERVER_URL", "http://localhost:8001")
-    
-    # Initialize tool registry
+
     tool_registry = ToolRegistry(api_server_url, mcp_server_url)
-    
-    # Test connections
+
     print("\n🔍 Testing tool connections...")
     if not await tool_registry.test_connections():
         print("❌ Cannot connect to required services. Please ensure API and MCP servers are running.")
         print(f"   API Server: {api_server_url}")
         print(f"   MCP Server: {mcp_server_url}")
         return
-    
+
     try:
-        # Approach 1: Direct LLM Agent
+        # Scenario 1: Local Microsoft Agent Framework with API and MCP tools
         if ai_endpoint:
-            direct_agent = DirectLLMAgent(ai_endpoint, model_name, tool_registry)
-            await direct_agent.run()
+            local_maf_agent = LocalMAFAgent(ai_endpoint, model_name, tool_registry)
+            await local_maf_agent.run()
         else:
-            print("\n⚠️  AI_ENDPOINT not configured, skipping direct LLM approach")
-        
-        # Wait between approaches
-        print("\n" + "."*80)
-        print("⏳ Waiting 3 seconds before next approach...")
+            print("\n⚠️  AI_ENDPOINT not configured, skipping local-maf scenario")
+
+        print("\n" + "." * 80)
+        print("⏳ Waiting 3 seconds before next scenario...")
         await asyncio.sleep(3)
-        
-        # Approach 2: Foundry Agent Service
+
+        # Scenario 2: Microsoft Agent Framework with Foundry Agent Service and API and MCP tools
         if project_endpoint:
-            foundry_agent = FoundryAgentService(project_endpoint, model_deployment, tool_registry)
-            await foundry_agent.run()
+            maf_with_fas_agent = MAFWithFASAgent(project_endpoint, model_deployment, tool_registry)
+            await maf_with_fas_agent.run()
         else:
-            print("\n⚠️  PROJECT_ENDPOINT not configured, skipping Foundry Agent Service approach")
-        
-        print("\n" + "="*80)
-        print("✅ All agent approaches completed successfully!")
-        print("="*80)
-        
-    except Exception as e:
-        print(f"\n❌ Error during agent execution: {e}")
+            print("\n⚠️  PROJECT_ENDPOINT not configured, skipping maf-with-fas scenario")
+
+        # TODO: Implement additional scenarios
+        # Scenario 3: Local Microsoft Agent Framework multi-agent (local-maf-multiagent)
+        # Scenario 4: MAF with Foundry Agent Service multi-agent (maf-with-fas-multiagent)
+        # Scenario 5: MAF with mix of local and Foundry Agent Service multi-agent (local-maf-with-fas-multiagent)
+
+        print("\n" + "=" * 80)
+        print("✅ All implemented scenarios completed successfully!")
+        print("=" * 80)
+
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n❌ Error during agent execution: {exc}")
         import traceback
         traceback.print_exc()
 
@@ -504,6 +500,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n⚠️  Testing interrupted by user")
         sys.exit(0)
-    except Exception as e:
-        print(f"\n❌ Fatal error: {e}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n❌ Fatal error: {exc}")
         sys.exit(1)
+

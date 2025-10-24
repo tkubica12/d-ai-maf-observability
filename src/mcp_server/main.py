@@ -1,7 +1,7 @@
 """
 MCP Server providing function calling capabilities to agents.
 
-This server exposes tools that can be called by agents.
+This server exposes tools that can be called by agents. Instrumented with OpenTelemetry.
 """
 import os
 from fastmcp import FastMCP
@@ -9,6 +9,60 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configure OpenTelemetry before creating FastMCP app
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider, ReadableSpan
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from typing import Sequence
+
+
+def health_endpoint_filter(span: ReadableSpan) -> bool:
+    """Filter out health check endpoints from traces."""
+    if span.attributes:
+        http_target = span.attributes.get("http.target")
+        url_path = span.attributes.get("url.path")
+        if http_target == "/health" or url_path == "/health":
+            return False
+    return True
+
+
+class FilteringSpanProcessor(BatchSpanProcessor):
+    """Span processor that filters spans before export."""
+    
+    def __init__(self, span_exporter: SpanExporter, filter_fn=None):
+        super().__init__(span_exporter)
+        self.filter_fn = filter_fn or (lambda span: True)
+    
+    def on_end(self, span: ReadableSpan) -> None:
+        if self.filter_fn(span):
+            super().on_end(span)
+
+
+# Configure OpenTelemetry
+resource = Resource(attributes={
+    SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "mcp-server")
+})
+
+trace.set_tracer_provider(TracerProvider(resource=resource))
+tracer_provider = trace.get_tracer_provider()
+
+# Add OTLP exporter with filtering
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+tracer_provider.add_span_processor(
+    FilteringSpanProcessor(otlp_exporter, filter_fn=health_endpoint_filter)
+)
+
+# Get tracer for custom spans
+tracer = trace.get_tracer(__name__)
+
+print(f"🔭 OpenTelemetry configured: {otlp_endpoint}")
+print(f"   Service: {os.getenv('OTEL_SERVICE_NAME', 'mcp-server')}")
+
+# Create FastMCP app
 mcp = FastMCP("Observability Demo MCP Server")
 
 # Static stock data for products
@@ -35,12 +89,17 @@ async def get_product_stock(product_id: str) -> dict:
     Returns:
         dict: Stock information including product_id and stock_count
     """
-    stock_count = PRODUCT_STOCK.get(product_id, 0)
-    return {
-        "product_id": product_id,
-        "stock_count": stock_count,
-        "available": stock_count > 0
-    }
+    with tracer.start_as_current_span("mcp.get_product_stock") as span:
+        span.set_attribute("product_id", product_id)
+        stock_count = PRODUCT_STOCK.get(product_id, 0)
+        result = {
+            "product_id": product_id,
+            "stock_count": stock_count,
+            "available": stock_count > 0
+        }
+        span.set_attribute("stock_count", stock_count)
+        span.set_attribute("available", stock_count > 0)
+        return result
 
 
 @mcp.tool()
@@ -79,6 +138,11 @@ def main():
     print(f"🚀 Starting MCP Server on {host}:{port}")
     print(f"Health endpoint: http://{host}:{port}/health")
     print(f"MCP endpoint: http://{host}:{port}/mcp/")
+    
+    # Instrument the underlying FastAPI app
+    if hasattr(mcp, 'app') and mcp.app:
+        FastAPIInstrumentor.instrument_app(mcp.app)
+        print("✅ FastAPI instrumented with OpenTelemetry")
     
     # Use mcp.run() with HTTP transport
     mcp.run(transport="http", host=host, port=port)

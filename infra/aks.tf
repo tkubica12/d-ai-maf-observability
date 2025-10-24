@@ -31,10 +31,22 @@ resource "azapi_resource" "aks" {
         }
       }
 
+      oidcIssuerProfile = {
+        enabled = true
+      }
+
+      securityProfile = {
+        workloadIdentity = {
+          enabled = true
+        }
+      }
+
       networkProfile = {
-        networkPlugin = "azure"
-        serviceCidr   = "10.1.0.0/16"
-        dnsServiceIP  = "10.1.0.10"
+        networkPlugin     = "azure"
+        networkPluginMode = "overlay"
+        networkDataplane  = "cilium"
+        serviceCidr       = "10.1.0.0/16"
+        dnsServiceIP      = "10.1.0.10"
       }
 
       agentPoolProfiles = [
@@ -44,11 +56,12 @@ resource "azapi_resource" "aks" {
           vmSize            = var.aks_node_vm_size
           mode              = "System"
           osType            = "Linux"
-          osSKU             = "Ubuntu"
+          osSKU             = "AzureLinux"
           type              = "VirtualMachineScaleSets"
           enableAutoScaling = true
           minCount          = var.aks_node_count
           maxCount          = var.aks_node_count + 3
+          maxPods           = 100
           vnetSubnetID      = azapi_resource.aks_subnet.id
         }
       ]
@@ -93,6 +106,6 @@ resource "local_file" "kubeconfig" {
   filename        = "${path.root}/.kubeconfig"
   content         = base64decode(azapi_resource_action.aks_creds.output.kubeconfigs[0].value)
   file_permission = "0600"
-  
+
   depends_on = [azapi_resource_action.aks_creds]
 }
