@@ -13,6 +13,46 @@ resource "azapi_resource" "vnet" {
   }
 }
 
+resource "azapi_resource" "aks_nsg" {
+  type      = "Microsoft.Network/networkSecurityGroups@2024-01-01"
+  name      = "${var.project_name}-${var.environment}-aks-nsg"
+  location  = var.location
+  parent_id = azapi_resource.rg.id
+
+  body = {
+    properties = {
+      securityRules = [
+        {
+          name = "AllowHTTPInbound"
+          properties = {
+            protocol                 = "Tcp"
+            sourcePortRange          = "*"
+            destinationPortRange     = "80"
+            sourceAddressPrefix      = "Internet"
+            destinationAddressPrefix = "*"
+            access                   = "Allow"
+            priority                 = 100
+            direction                = "Inbound"
+          }
+        },
+        {
+          name = "AllowHTTPSInbound"
+          properties = {
+            protocol                 = "Tcp"
+            sourcePortRange          = "*"
+            destinationPortRange     = "443"
+            sourceAddressPrefix      = "Internet"
+            destinationAddressPrefix = "*"
+            access                   = "Allow"
+            priority                 = 110
+            direction                = "Inbound"
+          }
+        }
+      ]
+    }
+  }
+}
+
 resource "azapi_resource" "aks_subnet" {
   type      = "Microsoft.Network/virtualNetworks/subnets@2024-01-01"
   name      = "aks-subnet"
@@ -21,8 +61,13 @@ resource "azapi_resource" "aks_subnet" {
   body = {
     properties = {
       addressPrefix = var.aks_subnet_address_prefix
+      networkSecurityGroup = {
+        id = azapi_resource.aks_nsg.id
+      }
     }
   }
+
+  depends_on = [azapi_resource.aks_nsg]
 }
 
 resource "azapi_resource" "nat_gateway_public_ip" {

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-api-tool
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "maf-demo.apiToolSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "maf-demo.apiToolSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: api-tool
+          image: "{{ .Values.apiTool.image.repository }}:{{ .Values.apiTool.image.tag }}"
+          imagePullPolicy: {{ .Values.apiTool.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.apiTool.containerPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.apiTool.resources | nindent 12 }}
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "{{ .Values.apiTool.containerPort }}"

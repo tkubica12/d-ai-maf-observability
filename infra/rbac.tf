@@ -11,6 +11,8 @@ resource "random_uuid" "cognitive_services_openai_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_openai_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_contributor_role_id" {}
+resource "random_uuid" "aks_network_contributor_role_id" {}
+resource "random_uuid" "aks_managed_identity_operator_role_id" {}
 
 # Role assignment for Azure AI Services access - Cognitive Services User
 resource "azapi_resource" "cognitive_services_user_role_assignment" {
@@ -92,6 +94,48 @@ resource "azapi_resource" "current_user_cognitive_services_contributor_role" {
       principalType    = "User"
     }
   }
+}
+
+# Role assignment: AKS identity as Network Contributor on resource group
+# Allows the AKS identity to read and manage network resources including public IPs
+# Required for NGINX ingress controller to use annotated public IP
+resource "azapi_resource" "aks_network_contributor_role" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.aks_network_contributor_role_id.result
+  parent_id = azapi_resource.rg.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "${azapi_resource.rg.id}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7"
+      principalId      = azapi_resource.aks_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
+    }
+  }
+
+  depends_on = [
+    azapi_resource.aks_identity
+  ]
+}
+
+# Role assignment: AKS identity as Managed Identity Operator on itself
+# Allows the AKS control plane to assign the kubelet identity
+# Required when using custom kubelet identity
+resource "azapi_resource" "aks_managed_identity_operator_role" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.aks_managed_identity_operator_role_id.result
+  parent_id = azapi_resource.aks_identity.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830"
+      principalId      = azapi_resource.aks_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
+    }
+  }
+
+  depends_on = [
+    azapi_resource.aks_identity
+  ]
 }
 
 # RBAC configuration for Azure AI Services access

@@ -10,6 +10,14 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.12"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.4"
+    }
   }
 }
 
@@ -18,3 +26,11 @@ provider "azapi" {
 }
 
 provider "random" {}
+
+provider "helm" {
+  kubernetes {
+    config_path = local_file.kubeconfig.filename
+  }
+}
+
+provider "local" {}

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-mcp-tool
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "maf-demo.mcpToolSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "maf-demo.mcpToolSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mcp-tool
+          image: "{{ .Values.mcpTool.image.repository }}:{{ .Values.mcpTool.image.tag }}"
+          imagePullPolicy: {{ .Values.mcpTool.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mcpTool.containerPort }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.mcpTool.resources | nindent 12 }}
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "{{ .Values.mcpTool.containerPort }}"

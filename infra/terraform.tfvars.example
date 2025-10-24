@@ -1,5 +1,11 @@
-subscription_id      = "00000000-0000-0000-0000-000000000000"
+subscription_id    = "00000000-0000-0000-0000-000000000000"
+base_domain        = "example.com"
+letsencrypt_email  = "admin@example.com"
 
 # Optional: Object ID of current user for development RBAC assignments
 # Get with: az ad signed-in-user show --query id --output tsv
 # current_user_object_id = "12345678-1234-1234-1234-123456789012"
+
+# Image tags (managed automatically by build script)
+# api_tool_image_tag = "latest"
+# mcp_tool_image_tag = "latest"

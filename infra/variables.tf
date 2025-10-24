@@ -156,3 +156,43 @@ variable "current_user_object_id" {
   EOT
   default     = null
 }
+
+variable "base_domain" {
+  type        = string
+  description = <<-EOT
+    Base domain name for ingress hostnames.
+    API service will be available at api-tool.<base_domain>
+    MCP service will be available at mcp-tool.<base_domain>
+    Example: "example.com", "myproject.dev"
+  EOT
+}
+
+variable "letsencrypt_email" {
+  type        = string
+  description = <<-EOT
+    Email address for Let's Encrypt certificate registration.
+    This email will receive notifications about certificate expiration.
+    Required for ACME certificate provisioning.
+    Example: "admin@example.com", "certificates@myproject.dev"
+  EOT
+}
+
+variable "api_tool_image_tag" {
+  type        = string
+  description = <<-EOT
+    Docker image tag for the API tool container.
+    Used for versioning and deployment control.
+    Example: "v1", "v2", "latest"
+  EOT
+  default     = "latest"
+}
+
+variable "mcp_tool_image_tag" {
+  type        = string
+  description = <<-EOT
+    Docker image tag for the MCP tool container.
+    Used for versioning and deployment control.
+    Example: "v1", "v2", "latest"
+  EOT
+  default     = "latest"
+}

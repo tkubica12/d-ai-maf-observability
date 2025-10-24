@@ -89,3 +89,28 @@ output "ai_models_endpoint" {
   description = "Direct endpoint URL for Azure AI models (for inference)"
   value       = "${azapi_resource.ai_services.output.properties.endpoint}models"
 }
+
+output "ingress_public_ip_address" {
+  description = "Public IP address for the ingress controller"
+  value       = azapi_resource.ingress_public_ip.output.properties.ipAddress
+}
+
+output "ingress_public_ip_name" {
+  description = "Name of the public IP for the ingress controller"
+  value       = azapi_resource.ingress_public_ip.name
+}
+
+output "ingress_public_ip_fqdn" {
+  description = "Fully qualified domain name for the ingress public IP"
+  value       = azapi_resource.ingress_public_ip.output.properties.dnsSettings.fqdn
+}
+
+output "api_tool_url" {
+  description = "URL for the API tool service"
+  value       = "https://api-tool.${var.base_domain}"
+}
+
+output "mcp_tool_url" {
+  description = "URL for the MCP tool service"
+  value       = "https://mcp-tool.${var.base_domain}"
+}

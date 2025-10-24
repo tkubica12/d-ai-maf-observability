@@ -25,6 +25,12 @@ resource "azapi_resource" "aks" {
       kubernetesVersion = var.aks_kubernetes_version
       dnsPrefix         = "${var.project_name}-${var.environment}"
 
+      identityProfile = {
+        kubeletidentity = {
+          resourceId = azapi_resource.aks_identity.id
+        }
+      }
+
       networkProfile = {
         networkPlugin = "azure"
         serviceCidr   = "10.1.0.0/16"
@@ -47,20 +53,14 @@ resource "azapi_resource" "aks" {
         }
       ]
 
-      oidcIssuerProfile = {
-        enabled = true
-      }
 
-      securityProfile = {
-        workloadIdentity = {
-          enabled = true
-        }
-      }
     }
   }
 
   depends_on = [
-    azapi_update_resource.aks_subnet_nat
+    azapi_update_resource.aks_subnet_nat,
+    azapi_resource.aks_network_contributor_role,
+    azapi_resource.aks_managed_identity_operator_role
   ]
 }
 
@@ -76,4 +76,23 @@ resource "azapi_resource" "aks_acr_role" {
       principalType    = "ServicePrincipal"
     }
   }
+}
+
+# Get AKS admin credentials
+resource "azapi_resource_action" "aks_creds" {
+  type        = "Microsoft.ContainerService/managedClusters@2024-05-01"
+  resource_id = azapi_resource.aks.id
+  action      = "listClusterAdminCredential"
+  method      = "POST"
+
+  response_export_values = ["kubeconfigs"]
+}
+
+# Generate kubeconfig file for Helm provider
+resource "local_file" "kubeconfig" {
+  filename        = "${path.root}/.kubeconfig"
+  content         = base64decode(azapi_resource_action.aks_creds.output.kubeconfigs[0].value)
+  file_permission = "0600"
+  
+  depends_on = [azapi_resource_action.aks_creds]
 }
