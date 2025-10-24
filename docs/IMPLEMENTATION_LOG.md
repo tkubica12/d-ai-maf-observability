@@ -218,3 +218,270 @@ resource "azapi_resource" "role_assignment" {
 ## 2025-10-24: Azure AI Agents SDK API Fixes
 
 Fixed Azure AI Agents SDK API compatibility issues in the Foundry Agent Service approach.
+
+## 2025-01-XX: OpenTelemetry Observability Implementation
+
+### Objective
+Add comprehensive OpenTelemetry instrumentation (traces, metrics, logs) to all services while preserving console output.
+
+### Architecture: Three-Signal Observability
+
+**OTLP Endpoint**: `http://localhost:4317` (configurable via `OTEL_EXPORTER_OTLP_ENDPOINT`)
+
+**Signal Stack**:
+```
+┌─────────────┬─────────────┬─────────────┐
+│   Traces    │   Metrics   │    Logs     │
+├─────────────┼─────────────┼─────────────┤
+│ OTLPSpan    │ OTLPMetric  │ OTLPLog     │
+│ Exporter    │ Exporter    │ Exporter    │
+├─────────────┼─────────────┼─────────────┤
+│ BatchSpan   │ Periodic    │ BatchLog    │
+│ Processor   │ Reader      │ Processor   │
+├─────────────┼─────────────┼─────────────┤
+│ Tracer      │ Meter       │ Logger      │
+│ Provider    │ Provider    │ Provider    │
+└─────────────┴─────────────┴─────────────┘
+```
+
+### Changes Implemented
+
+#### 1. Agent Service (`src/agent/main.py`)
+**Instrumentation**:
+- ✅ Traces: Agent Framework built-in observability via `get_tracer()`
+- ✅ Metrics: Custom `custom_agent_call_count` counter (random 1-100 for demo)
+- ✅ Logs: OTLP logger with structured extra fields
+- ✅ Dual output: Console prints preserved + OTLP logs added alongside
+
+**Custom Dimensions**:
+```python
+# Metric dimensions
+dimensions = {
+    "user_id": user_id,
+    "scenario_id": scenario,
+    "is_vip": str(is_vip).lower(),
+    "department": department,
+    "thread_id": thread_id
+}
+custom_agent_call_count.add(call_count, attributes=dimensions)
+```
+
+**Key Pattern**: `print()` + `logger.info()` for every user-facing message
+
+#### 2. API Server (`src/api_server/main.py`)
+**Instrumentation**:
+- ✅ Traces: FastAPI auto-instrumentation + custom spans
+- ✅ Metrics: FastAPI auto-instrumentation (HTTP metrics)
+- ✅ Logs: OTLP logger with structured logging
+- ✅ Environment variables for configuration
+
+**Custom Span**:
+```python
+with tracer.start_as_current_span("api.tool.process_product_request") as span:
+    span.set_attribute("tool.name", "get_product_of_the_day")
+    span.set_attribute("tool.type", "api")
+    span.set_attribute("product.id", product_id)
+```
+
+**FastAPI Metrics Configuration**:
+```python
+meter_provider = MeterProvider(
+    resource=resource,
+    metric_readers=[PeriodicExportingMetricReader(OTLPMetricExporter(...))]
+)
+FastAPIInstrumentor.instrument_app(app, meter_provider=meter_provider)
+```
+
+**Auto-Emitted HTTP Metrics**:
+- `http.server.duration` - Request duration histogram
+- `http.server.request.size` - Request body size
+- `http.server.response.size` - Response body size  
+- `http.server.active_requests` - Active request count
+
+**Environment Variables**:
+```python
+os.environ["OTEL_PYTHON_EXCLUDED_URLS"] = "/health"
+os.environ["OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_REQUEST"] = ".*"
+os.environ["OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_RESPONSE"] = ".*"
+```
+
+#### 3. MCP Server (`src/mcp_server/main.py`)
+**Instrumentation**:
+- ✅ Traces: FastAPI auto-instrumentation (via `mcp.app`) + nested custom spans
+- ✅ Metrics: FastAPI auto-instrumentation (HTTP metrics)
+- ✅ Logs: OTLP logger with structured logging
+- ✅ Environment variables for configuration
+
+**Nested Custom Spans**:
+```python
+# Outer span: tool processing
+with tracer.start_as_current_span("mcp.tool.process_stock_lookup") as outer_span:
+    outer_span.set_attribute("tool.name", "get_product_stock")
+    outer_span.set_attribute("tool.type", "mcp")
+    
+    # Inner span: business logic
+    with tracer.start_as_current_span("mcp.get_product_stock") as inner_span:
+        inner_span.set_attribute("product.id", product_id)
+        inner_span.set_attribute("stock.count", stock_count)
+        inner_span.set_attribute("stock.available", is_available)
+```
+
+**FastMCP + FastAPI Instrumentation**:
+```python
+# FastMCP exposes FastAPI app via mcp.app
+FastAPIInstrumentor.instrument_app(mcp.app, meter_provider=meter_provider)
+```
+
+### Design Decisions
+
+1. **Dual Output Strategy**: Preserve all console prints for developer experience, add OTLP logs for observability platform
+2. **Environment Variables Over Code**: Use `OTEL_PYTHON_EXCLUDED_URLS` instead of custom `FilteringSpanProcessor`
+3. **Manual Spans for Business Context**: Auto-instrumentation captures HTTP layer, custom spans capture tool semantics
+4. **Nested Spans in MCP**: Outer span = tool processing, inner span = business logic (enables drill-down analysis)
+5. **FastAPI Metrics via MeterProvider**: Pass `meter_provider` to `instrument_app()` for automatic HTTP metrics
+6. **LogRecord Attribute Naming**: Avoid reserved attributes like "message", use "user_message" in `extra={}`
+
+### Dependencies Added
+
+All three services (`agent`, `api_server`, `mcp_server`):
+```toml
+[project]
+dependencies = [
+    # ... existing ...
+    "opentelemetry-instrumentation-logging>=0.51b0",
+]
+```
+
+Existing OTEL packages already sufficient:
+- `opentelemetry-api>=1.30.0`
+- `opentelemetry-sdk>=1.30.0`
+- `opentelemetry-exporter-otlp-proto-grpc>=1.30.0` (includes metric exporter)
+- `opentelemetry-instrumentation-fastapi>=0.51b0`
+
+### Issues Encountered and Resolved
+
+1. **KeyError: "Attempt to overwrite 'message' in LogRecord"**
+   - **Cause**: Python logging reserves "message" attribute in LogRecord
+   - **Fix**: Changed `extra={"message": ...}` to `extra={"user_message": ...}`
+
+2. **Complex Health Endpoint Filtering**
+   - **Original**: Custom `FilteringSpanProcessor` class to exclude `/health`
+   - **Improved**: `os.environ["OTEL_PYTHON_EXCLUDED_URLS"] = "/health"`
+
+3. **FastMCP Instrumentation Approach**
+   - **Question**: Should we use `openinference-instrumentation-mcp`?
+   - **Decision**: Manual instrumentation because:
+     - FastMCP ≠ official `mcp` package (different transport)
+     - Need application-level spans, not protocol-level
+     - FastAPI auto-instrumentation already covers HTTP layer
+
+4. **FastAPI Metrics Not Emitting**
+   - **Cause**: MeterProvider not configured and passed to instrumentor
+   - **Fix**: Create MeterProvider with OTLP exporter, pass to `instrument_app(meter_provider=...)`
+
+### Testing Verification
+
+**Checklist**:
+- [ ] Agent: Console prints still visible
+- [ ] Agent: `custom_agent_call_count` metric recorded with dimensions
+- [ ] API: `/health` endpoint NOT creating spans
+- [ ] API: All request headers captured in spans
+- [ ] API: `api.tool.process_product_request` custom span appears
+- [ ] API: HTTP metrics (`http.server.*`) emitted
+- [ ] MCP: Nested spans appear (`mcp.tool.process_stock_lookup` → `mcp.get_product_stock`)
+- [ ] MCP: HTTP metrics (`http.server.*`) emitted
+- [ ] All: Logs visible in OTLP collector with structured fields
+
+### Next Steps
+
+1. Integration testing: Run all services, verify telemetry in OTEL collector
+2. Update Helm charts with OTEL environment variables
+3. Configure OTEL collector deployment in K8s
+4. Connect to observability backend (Azure Monitor, Grafana, etc.)
+5. Create sample queries and dashboards for custom metrics/spans
+
+## 2025-10-24: Observability Fixes - Metrics and Trace Propagation
+
+### Issues Identified and Fixed
+
+#### 1. Custom Metrics Not Exported from Agent
+**Problem**: `custom_agent_call_count` metric not appearing in OTEL backend  
+**Root Cause**: Incorrect API usage - dict as positional argument instead of `attributes=` named parameter
+
+**Fix**:
+```python
+# Changed from:
+agent_call_counter.add(demo_value, {...})
+
+# To:
+agent_call_counter.add(demo_value, attributes={...})
+```
+
+#### 2. Trace Context Not Propagated (Agent → API/MCP)
+**Problem**: Traces from agent, API, and MCP were independent - no parent-child relationship  
+**Root Cause**: httpx and aiohttp HTTP clients not instrumented to inject trace context headers
+
+**Fix**: Added HTTP client instrumentation in `src/agent/main.py`:
+```python
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+
+HTTPXClientInstrumentor().instrument()
+AioHttpClientInstrumentor().instrument()
+```
+
+**How Trace Propagation Works**:
+1. Agent makes HTTP call → httpx injects `traceparent` header with current trace_id/span_id
+2. API/MCP receives request → FastAPI instrumentation extracts header and creates child span
+3. Result: Complete distributed trace across all services with same trace_id
+
+#### 3. Console Log Noise
+**Problem**: Library loggers (agent_framework, httpx, azure.identity, etc.) polluting console output  
+**Fix**: 
+- Cleared all console handlers from root logger
+- Set library loggers to CRITICAL level to suppress console output
+- OTLP handler still captures everything for telemetry
+- Only application `print()` statements appear on console
+
+**Result**: Clean demo-friendly console while maintaining full observability via OTLP.
+
+#### 4. MCP Server Metrics
+**Status**: Configuration appears correct with MeterProvider and FastAPIInstrumentor. May require runtime verification if metrics still don't appear.
+
+### Files Modified
+
+**src/agent/main.py**:
+- Added httpx/aiohttp instrumentation for trace propagation
+- Fixed custom metric API (attributes= parameter)
+- Cleaned up console logging configuration
+- Enhanced metric recording with structured logging
+
+**src/agent/Dockerfile**:
+- Added 15-second startup delay to wait for API/MCP services
+
+### Documentation Created
+
+**OBSERVABILITY_FIXES.md**: Comprehensive guide covering:
+- All identified issues and fixes
+- Testing checklist for verifying metrics and traces
+- Debugging tips for trace propagation
+- Known limitations and next steps
+
+### Dependencies Verified
+
+All required instrumentation packages already in pyproject.toml:
+- `opentelemetry-instrumentation-httpx>=0.51b0`
+- `opentelemetry-instrumentation-aiohttp-client>=0.51b0`
+- `opentelemetry-instrumentation-fastapi>=0.51b0`
+- `opentelemetry-instrumentation-logging>=0.51b0`
+
+### Testing Requirements
+
+After rebuild and redeploy, verify:
+1. ✅ Custom metrics appear with correct dimensions
+2. ✅ Traces span all services with same trace_id
+3. ✅ HTTP spans show parent-child relationships
+4. ✅ Console output clean (only prints, no library logs)
+5. ✅ All telemetry in OTEL backend
+
+

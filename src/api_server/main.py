@@ -4,6 +4,7 @@ API Server that receives function calls from MCP server.
 This server provides a simple API endpoint that can be called through
 function calling from the MCP server. Instrumented with OpenTelemetry.
 """
+import logging
 import os
 import random
 from fastapi import FastAPI
@@ -13,66 +14,88 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configure Python logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Set environment variables for OTEL instrumentation before importing
+os.environ.setdefault("OTEL_PYTHON_EXCLUDED_URLS", "/health")
+os.environ.setdefault("OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_REQUEST", ".*")
+os.environ.setdefault("OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_RESPONSE", ".*")
+
 # Configure OpenTelemetry before creating FastAPI app
-from opentelemetry import trace
+from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-# Custom span filter to exclude /health endpoint
-def health_endpoint_filter(span):
-    """Filter out /health endpoint from traces."""
-    if span.attributes:
-        # Check various possible attribute names for the URL path
-        http_target = (
-            span.attributes.get("http.target") 
-            or span.attributes.get("url.path")
-            or span.attributes.get("http.url")
-            or span.attributes.get("url.full")
-        )
-        if http_target and "/health" in str(http_target):
-            return False
-    return True
 
 # Configure OpenTelemetry
 resource = Resource(attributes={
     SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "api-server")
 })
 
+# Set up tracing
 trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer_provider = trace.get_tracer_provider()
 
-# Add OTLP exporter with filter
+# Add OTLP exporter
 otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
 otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
 
-# Wrap processor with filtering
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
-class FilteringSpanProcessor(BatchSpanProcessor):
-    """Span processor that filters spans based on a predicate."""
-    def __init__(self, span_exporter, span_filter=None, **kwargs):
-        super().__init__(span_exporter, **kwargs)
-        self._span_filter = span_filter or (lambda span: True)
-    
-    def on_end(self, span):
-        if self._span_filter(span):
-            super().on_end(span)
+# Get tracer for custom spans
+tracer = trace.get_tracer(__name__)
 
-tracer_provider.add_span_processor(
-    FilteringSpanProcessor(otlp_exporter, span_filter=health_endpoint_filter)
+# Set up metrics
+metric_reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint=otlp_endpoint, insecure=True)
 )
+meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+metrics.set_meter_provider(meter_provider)
+
+# Configure OTLP logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry._logs import set_logger_provider
+
+# Create log provider with resource
+log_resource = Resource(attributes={
+    SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "api-server")
+})
+logger_provider = LoggerProvider(resource=log_resource)
+set_logger_provider(logger_provider)
+
+# Add OTLP log exporter
+otlp_log_exporter = OTLPLogExporter(endpoint=otlp_endpoint, insecure=True)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
+
+# Attach OTLP handler to Python logging
+handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+logging.getLogger().addHandler(handler)
+logging.getLogger().setLevel(logging.INFO)
 
 print(f"🔭 OpenTelemetry configured: {otlp_endpoint}")
 print(f"   Service: {os.getenv('OTEL_SERVICE_NAME', 'api-server')}")
+logger.info(
+    "OpenTelemetry configured",
+    extra={
+        "otlp_endpoint": otlp_endpoint,
+        "service_name": os.getenv("OTEL_SERVICE_NAME", "api-server")
+    }
+)
 
 # Create FastAPI app
 app = FastAPI(title="API Server", version="0.1.0")
 
-# Instrument FastAPI with OpenTelemetry
-FastAPIInstrumentor.instrument_app(app)
+# Instrument FastAPI with OpenTelemetry (includes metrics)
+FastAPIInstrumentor.instrument_app(app, meter_provider=meter_provider)
 
 # Add CORS middleware
 app.add_middleware(
@@ -137,11 +160,26 @@ async def get_product_of_the_day():
     Returns:
         ProductResponse: Randomly selected product with ID and description
     """
-    product = random.choice(PRODUCTS)
-    return ProductResponse(
-        product_id=product["product_id"],
-        product_description=product["product_description"]
-    )
+    # Create custom span for tool processing
+    with tracer.start_as_current_span("api.tool.process_product_request") as span:
+        span.set_attribute("tool.name", "get_product_of_the_day")
+        span.set_attribute("tool.type", "api")
+        
+        product = random.choice(PRODUCTS)
+        span.set_attribute("product.id", product["product_id"])
+        
+        logger.info(
+            "Product of the day requested",
+            extra={
+                "product_id": product["product_id"],
+                "product_description": product["product_description"]
+            }
+        )
+        
+        return ProductResponse(
+            product_id=product["product_id"],
+            product_description=product["product_description"]
+        )
 
 
 @app.post("/process", response_model=ProcessDataResponse)
@@ -156,6 +194,7 @@ async def process_data(request: ProcessDataRequest):
         ProcessDataResponse with the result
     """
     result = f"Processed: {request.data}"
+    logger.info("Data processed", extra={"data": request.data, "result": result})
     return ProcessDataResponse(
         result=result,
         message="Data processed successfully"
@@ -170,6 +209,7 @@ def main():
     port = int(os.getenv("PORT", "8000"))
     
     print(f"🚀 Starting API Server on {host}:{port}")
+    logger.info("Starting API Server", extra={"host": host, "port": port})
     uvicorn.run(app, host=host, port=port)
 
 
