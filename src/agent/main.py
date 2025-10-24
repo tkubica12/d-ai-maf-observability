@@ -364,14 +364,14 @@ Always use both API and MCP tools to provide complete information.""",
                 
                 try:
                     # Create thread
-                    thread = await project_client.agents.create_thread()
+                    thread = await project_client.agents.threads.create()
                     print(f"✅ Thread created: {thread.id}")
                     
                     # Send user message
                     user_message = "What's the product of the day and is it in stock?"
                     print(f"\n📤 User: {user_message}")
                     
-                    await project_client.agents.create_message(
+                    await project_client.agents.messages.create(
                         thread_id=thread.id,
                         role="user",
                         content=user_message
@@ -379,15 +379,15 @@ Always use both API and MCP tools to provide complete information.""",
                     
                     # Run agent
                     print("\n🤖 Agent processing...")
-                    run = await project_client.agents.create_run(
+                    run = await project_client.agents.runs.create(
                         thread_id=thread.id,
-                        assistant_id=agent.id
+                        agent_id=agent.id
                     )
                     
                     # Wait for completion and handle tool calls
                     while run.status in ["queued", "in_progress", "requires_action"]:
                         await asyncio.sleep(1)
-                        run = await project_client.agents.get_run(
+                        run = await project_client.agents.runs.get(
                             thread_id=thread.id,
                             run_id=run.id
                         )
@@ -397,9 +397,9 @@ Always use both API and MCP tools to provide complete information.""",
                             await self._handle_required_actions(project_client, thread.id, run.id, run.required_action)
                     
                     # Get final messages
-                    messages = await project_client.agents.list_messages(thread_id=thread.id)
+                    messages = project_client.agents.messages.list(thread_id=thread.id)
                     print("\n📨 Agent response:")
-                    for msg in messages.data:
+                    async for msg in messages:
                         if msg.role == "assistant":
                             for content in msg.content:
                                 if hasattr(content, 'text') and content.text:
@@ -437,7 +437,7 @@ Always use both API and MCP tools to provide complete information.""",
                 })
         
         # Submit tool outputs
-        await project_client.agents.submit_tool_outputs_to_run(
+        await project_client.agents.runs.submit_tool_outputs(
             thread_id=thread_id,
             run_id=run_id,
             tool_outputs=tool_outputs

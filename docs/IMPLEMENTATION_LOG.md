@@ -213,3 +213,8 @@ resource "azapi_resource" "role_assignment" {
 - All services support configurable hosts/ports via environment variables
 - Two agent variants: Foundry-based and direct model access
 - Complete DefaultAzureCredential authentication chain
+
+
+## 2025-10-24: Azure AI Agents SDK API Fixes
+
+Fixed Azure AI Agents SDK API compatibility issues in the Foundry Agent Service approach.
