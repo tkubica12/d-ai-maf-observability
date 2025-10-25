@@ -1,200 +1,104 @@
-# d-ai-maf-observability
-Microsoft Agent Framework observability
+# Microsoft Agent Framework Observability Demo
 
-## Overview
+Comprehensive observability for Microsoft Agent Framework (MAF) applications across different deployment scenarios and interaction patterns.
 
-This project demonstrates comprehensive observability for Microsoft Agent Framework (MAF) applications with MCP (Model Context Protocol) integration and API-based function calling.
+## Scenarios
+
+| Scenario | Hosting | Agents | Description |
+|----------|---------|--------|-------------|
+| `local-maf` | Local | Single | MAF running locally, accessing tools via API and MCP from local runtime |
+| `maf-with-fas` | Cloud | Single | MAF leveraging FAS, accessing tools via API and MCP from FAS in cloud |
+| `local-maf-multiagent` ✅ | Local | Multi | MAF with Magentic orchestration of two local agents |
+| `maf-with-fas-multiagent` | Cloud | Multi | MAF leveraging FAS with connected agents, both in FAS (cloud) |
+| `local-maf-with-fas-multiagent` | Hybrid | Multi | MAF hosting one agent communicating with second agent running in FAS |
+| `local-maf-multiagent-a2a` | Hybrid | Multi (via A2A) | MAF hosting one agent communicating with generic A2A agent running outside of MAF |
+| `maf-with-fas-multiagent-a2a` | Cloud | Multi (via A2A) | MAF leveraging FAS for agents where one agent is generic A2A agent running outside of FAS/MAF |
 
 ## Architecture
 
 ```
-Agent (MAF) → MCP Server → API Server
+Agent (MAF) → [MCP Server, API Server] → Azure OpenAI / Foundry Agent Service
+              ↓
+         OTEL Collector → Aspire Dashboard
 ```
 
-- **Agent**: Microsoft Agent Framework agent with MCP tool integration
-- **MCP Server**: FastMCP-based server exposing function calling tools
-- **API Server**: FastAPI REST API processing data from function calls
+**Components**:
+- **Agent**: MAF with Magentic orchestration, MCP tools, API integration
+- **MCP Server**: FastMCP-based function calling tools
+- **API Server**: FastAPI REST API for data processing
+- **OTEL Stack**: Distributed tracing, metrics, and logs
 
-## Quick Start
+## Quick Start (Local Development)
 
-### Prerequisites
-
-- Python 3.12+
-- pip or uv package manager
-
-### 1. API Server
-
-```bash
-cd src/api_server
-pip install fastapi uvicorn pydantic python-dotenv
-cp .env.example .env
-python main.py
-```
-
-The API server will start on http://localhost:8000
-
-### 2. MCP Server
-
-```bash
-cd src/mcp_server
-pip install fastmcp httpx python-dotenv
-cp .env.example .env
-python main.py
-```
-
-### 3. Agent
+### Run Agent with Scenarios
 
 ```bash
 cd src/agent
-pip install azure-ai-projects azure-identity python-dotenv mcp
-cp .env.example .env
-python main.py
+uv run main.py -s local-maf              # Single agent, local
+uv run main.py -s maf-with-fas           # Single agent, cloud (FAS)
+uv run main.py -s local-maf-multiagent   # Multi-agent, Magentic orchestration
 ```
 
-The agent will run in demo mode if Azure credentials are not configured.
+### Run Supporting Services
+
+```bash
+# API Server (port 8000)
+cd src/api_server && uv run main.py
+
+# MCP Server (port 8001)
+cd src/mcp_server && uv run main.py
+```
+
+Configure `.env` files in each directory (see `.env.example`).
 
 ## Documentation
 
-- [Design Document](docs/DESIGN.md) - Architecture and design decisions
-- [Implementation Log](docs/IMPLEMENTATION_LOG.md) - Development history and decisions
-- [Agent README](src/agent/README.md) - Agent service details
-- [MCP Server README](src/mcp_server/README.md) - MCP server details
-- [API Server README](src/api_server/README.md) - API server details
+- **[Design Document](docs/DESIGN.md)** - Complete architecture, scenario matrix, telemetry strategy
+- [Implementation Log](docs/IMPLEMENTATION_LOG.md) - Development history
+- Service READMEs: [Agent](src/agent/README.md) | [MCP Server](src/mcp_server/README.md) | [API Server](src/api_server/README.md)
 
-## Deployment to Azure (Production)
+## Deployment to Azure
 
-### Prerequisites
-- Azure subscription
-- Terraform installed
-- kubectl configured
-- Azure CLI authenticated
+See [Design Document](docs/DESIGN.md) for infrastructure details.
 
-### 1. Configure Infrastructure
+### Quick Deploy
 
 ```bash
-cd infra
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
+# 1. Configure
+cd infra && cp terraform.tfvars.example terraform.tfvars
+# Edit with your values
+
+# 2. Deploy infrastructure
+terraform init && terraform apply
+
+# 3. Build & push images
+cd ../scripts && uv run build_and_push.py
+
+# 4. Update deployment
+cd ../infra && terraform apply
 ```
 
-### 2. Deploy Infrastructure
+**Access**:
+- Aspire Dashboard: `https://aspire.{domain}`
+- API Server: `$(terraform output -raw api_tool_url)`
+- MCP Server: `$(terraform output -raw mcp_tool_url)`
 
-```bash
-terraform init
-terraform plan
-terraform apply
-```
+## Observability Stack
 
-This deploys:
-- AKS cluster with monitoring
-- Azure Container Registry
-- Azure AI Services
-- OpenTelemetry Collector
-- Aspire Dashboard at `https://aspire.{domain}`
-- Ingress with TLS certificates
-
-### 3. Build and Push Images
-
-```bash
-cd ../scripts
-uv run build_and_push.py
-```
-
-This builds and pushes three container images to ACR:
-- `agent` - MAF agent with workload identity
-- `api-tool` - REST API server
-- `mcp-tool` - MCP server
-
-Versions are automatically incremented and tracked in `infra/images.auto.tfvars`.
-
-### 4. Deploy Updated Helm Chart
-
-```bash
-cd ../infra
-terraform apply  # Updates Helm release with new image tags
-```
-
-### 5. Access Services
-
-Get URLs from Terraform outputs:
-```bash
-terraform output api_tool_url          # API Server
-terraform output mcp_tool_url          # MCP Server  
-terraform output aspire_dashboard_url  # Observability UI
-```
-
-**Agent** runs inside the cluster with:
-- Workload identity for Azure AI authentication
-- Internal service URLs for API and MCP tools
-- OTEL endpoint at `maf-demo-otel-collector:4317`
-
-### 6. View Telemetry
-
-Open Aspire Dashboard to see:
-- **Traces**: Distributed traces across services
-- **Metrics**: Request rates and durations
-- **Logs**: Structured application logs
+- **OTEL Collector**: Centralized telemetry (`otel-collector:4317`)
+- **Aspire Dashboard**: Traces, metrics, logs visualization
+- **Instrumentation**: Agent (manual spans), API/MCP (auto + manual)
 
 Generate test traces:
 ```bash
-curl $(terraform output -raw api_tool_url)/health
 curl $(terraform output -raw api_tool_url)/product-of-the-day
 ```
 
-## Observability
-
-### OpenTelemetry Stack
-- **Collector**: `maf-demo-otel-collector:4317` (OTLP gRPC)
-- **Aspire Dashboard**: Web UI at `https://aspire.{domain}`
-- **Console Debug**: Collector logs spans for troubleshooting
-
-### Instrumentation
-- **Agent**: Manual OTEL SDK with custom business logic spans
-- **API Server**: Automatic FastAPI instrumentation
-- **MCP Server**: Hybrid auto + manual instrumentation
-
-All services use standard OTEL environment variables automatically configured in Kubernetes.
-
-### Troubleshooting
-
-**View collector logs**:
-```bash
-kubectl logs -n maf-demo -l app.kubernetes.io/component=otel-collector -f
-```
-
-**Check service telemetry**:
-```bash
-kubectl logs -n maf-demo -l app.kubernetes.io/component=api-tool
-# Look for: 🔭 OpenTelemetry configured: http://...
-```
-
-**Port forward Aspire locally**:
-```bash
-kubectl port-forward -n maf-demo svc/maf-demo-aspire-dashboard 18888:18888
-# Open http://localhost:18888
-```
-
-## Docker Support
-
-Each service includes a Dockerfile:
-
-```bash
-# API Server
-cd src/api_server
-docker build -t api-server .
-docker run -p 8000:8000 api-server
-
-# MCP Server
-cd src/mcp_server
-docker build -t mcp-server .
-docker run -p 8001:8001 mcp-server
-
-# Agent
-cd src/agent
-docker build -t agent .
-docker run --env-file .env agent
-```
-
-## Development Guidelines
+## Development
 
 See [AGENTS.md](AGENTS.md) for development guidelines and best practices.
+
+---
+
+**Status**: Phase 2 - Multi-Agent Patterns (3 of 7 scenarios implemented)  
+**Tech Stack**: Python 3.12+ | MAF | FastAPI | FastMCP | OpenTelemetry | Terraform | AKS

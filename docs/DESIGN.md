@@ -6,49 +6,73 @@ Demonstrate comprehensive observability capabilities for Microsoft Agent Framewo
 
 ## Observability Scenarios
 
-### Agent Execution Patterns
+### Scenario Matrix
 
-#### Implemented Scenarios
+| Scenario ID | Hosting | Agents | Description |
+|-------------|---------|--------|-------------|
+| `local-maf` | Local | Single | MAF running locally, accessing tools via API and MCP from local runtime |
+| `maf-with-fas` | Cloud | Single | MAF leveraging FAS, accessing tools via API and MCP from FAS in cloud |
+| `local-maf-multiagent` | Local | Multi | MAF with Magentic orchestration of two local agents |
+| `maf-with-fas-multiagent` | Cloud | Multi | MAF leveraging FAS with connected agents, both in FAS (cloud) |
+| `local-maf-with-fas-multiagent` | Hybrid | Multi | MAF hosting one agent communicating with second agent running in FAS |
+| `local-maf-multiagent-a2a` | Hybrid | Multi (via A2A) | MAF hosting one agent communicating with generic A2A agent running outside of MAF |
+| `maf-with-fas-multiagent-a2a` | Cloud | Multi (via A2A) | MAF leveraging FAS for agents where one agent is generic A2A agent running outside of FAS/MAF |
 
-1. **Local Microsoft Agent Framework with API and MCP tools** (`local-maf`)
-   - Agent running locally using AzureOpenAIResponsesClient
-   - Direct Azure OpenAI endpoint access
-   - Tool integration: API server (HTTP) and MCP server
-   - Full control over agent orchestration
-   - Use case: Development, testing, custom orchestration logic
+### Scenario Details
 
-2. **Microsoft Agent Framework with Foundry Agent Service and API and MCP tools** (`maf-with-fas`)
-   - Agent leveraging Azure AI Foundry Agent Service via AzureAIAgentClient
-   - Managed agent lifecycle (create, threads, messages, runs)
-   - Same tool integration: API server and MCP server
-   - Foundry handles orchestration, state management, scaling
-   - Use case: Production deployments, enterprise scenarios, managed infrastructure
+#### Single-Agent Scenarios
+
+**`local-maf`** - Local MAF with Direct Azure OpenAI Access
+- Agent running locally using AzureOpenAIResponsesClient
+- Direct Azure OpenAI endpoint access
+- Tool integration: API server (HTTP) and MCP server
+- Full control over agent orchestration
+- Use case: Development, testing, custom orchestration logic
+
+**`maf-with-fas`** - MAF with Foundry Agent Service
+- Agent leveraging Azure AI Foundry Agent Service via AzureAIAgentClient
+- Managed agent lifecycle (create, threads, messages, runs)
+- Same tool integration: API server and MCP server
+- Foundry handles orchestration, state management, scaling
+- Use case: Production deployments, enterprise scenarios, managed infrastructure
 
 #### Multi-Agent Scenarios
 
-**Architecture Decision**: Facilitator + Worker pattern
-- **Facilitator Agent**: Front-end agent responsible for user interaction, routing, and response synthesis
-- **Worker Agent**: Existing agent with API and MCP tools (specialized in product queries and stock lookup)
-- **Communication**: Facilitator delegates to worker, worker returns results, facilitator presents to user
+**Architecture Pattern**: Magentic Orchestration
+- **Orchestrator/Manager**: Built-in Magentic manager coordinates specialized agents
+- **Worker Agent(s)**: Specialized agents with specific tools and capabilities (e.g., product queries, stock lookup)
+- **Communication**: Manager dynamically plans, delegates, tracks progress, and synthesizes final results
+- **Pattern Benefits**: Adaptive task decomposition, iterative refinement, automatic agent selection
 
-3. **Local Microsoft Agent Framework multi-agent** (`local-maf-multiagent`)
-   - Facilitator agent running locally
-   - Worker agent running locally (current implementation)
-   - Direct Python function calls for agent-to-agent communication
-   - Both agents use AzureOpenAIResponsesClient
-   - Use case: Development, testing multi-agent patterns
+**`local-maf-multiagent`** - Local MAF with Magentic Orchestration ✅
+- Magentic orchestrator and worker agent both running locally
+- Built-in Magentic orchestration pattern from Agent Framework
+- Both use AzureOpenAIResponsesClient
+- Use case: Development, testing multi-agent patterns with intelligent coordination
 
-4. **Local MAF with Agent-to-Agent (A2A) protocol** (`local-maf-with-a2a`)
-   - Facilitator agent running locally
-   - Worker agent packaged as A2A service (HTTP/REST interface)
-   - Standardized agent communication via A2A protocol
-   - Use case: Testing production-ready agent interfaces locally
+**`maf-with-fas-multiagent`** - Cloud-Hosted Multi-Agent ⏳
+- Magentic orchestrator hosted in Foundry Agent Service
+- Worker agent(s) also in FAS
+- All agents managed by Foundry
+- Use case: Production multi-agent with fully managed infrastructure
 
-5. **MAF with Foundry Agent Service calling A2A** (`local-maf-with-fas-a2a`)
-   - Facilitator agent hosted in Foundry Agent Service
-   - Worker agent as A2A service
-   - Foundry handles facilitator lifecycle and scaling
-   - Use case: Production deployment with managed facilitator, independent worker services
+**`local-maf-with-fas-multiagent`** - Hybrid Multi-Agent ⏳
+- Orchestrator running locally
+- Worker agent running in Foundry Agent Service
+- Cross-boundary agent coordination
+- Use case: Hybrid scenarios, gradual cloud migration
+
+**`local-maf-multiagent-a2a`** - Local MAF with A2A Worker ⏳
+- Orchestrator running locally
+- Worker packaged as generic A2A service (HTTP/REST interface)
+- Standardized agent communication via A2A protocol
+- Use case: Testing production-ready agent interfaces, interoperability
+
+**`maf-with-fas-multiagent-a2a`** - Cloud MAF with A2A Worker ⏳
+- Orchestrator hosted in Foundry Agent Service
+- Worker as external A2A service
+- FAS manages orchestrator lifecycle
+- Use case: Production deployment with managed orchestrator, independent worker services
 
 ### Telemetry Collection Strategy
 - **Traces**: Request flows, agent interactions, tool executions, service calls
@@ -108,16 +132,18 @@ Mock user data for realistic observability scenarios:
 ### Phase 1: Foundation (Completed)
 - Basic MAF agent with OTEL instrumentation ✅
 - Core infrastructure deployment ✅
-- Two scenarios implemented:
+- Single-agent scenarios:
   - `local-maf`: Local MAF with Azure OpenAI Responses API ✅
   - `maf-with-fas`: MAF with Foundry Agent Service ✅
 - MCP tool integration with dynamic parameter handling ✅
 - Conditional observability (OTEL on/off) ✅
 
 ### Phase 2: Multi-Agent Patterns (In Progress)
-- ✅ `local-maf-multiagent`: Facilitator + worker pattern with direct calls
-- ⏳ `local-maf-with-a2a`: Worker as A2A service, facilitator local
-- ⏳ `local-maf-with-fas-a2a`: Worker as A2A service, facilitator in Foundry
+- ✅ `local-maf-multiagent`: Magentic orchestration with local agents
+- ⏳ `maf-with-fas-multiagent`: Cloud-hosted multi-agent with FAS
+- ⏳ `local-maf-with-fas-multiagent`: Hybrid multi-agent (local orchestrator, FAS worker)
+- ⏳ `local-maf-multiagent-a2a`: Local orchestrator with A2A worker
+- ⏳ `maf-with-fas-multiagent-a2a`: FAS orchestrator with A2A worker
 - Enhanced telemetry for multi-agent scenarios
 - Agent collaboration patterns and metrics
 
@@ -198,12 +224,14 @@ Agent Pod → Workload Identity → Azure AI Services (authenticated)
 
 ## Success Metrics
 
-- **Scenario Coverage**: All 5 scenarios implemented and instrumented
-  - ✅ `local-maf`: Implemented
-  - ✅ `maf-with-fas`: Implemented
-  - ✅ `local-maf-multiagent`: Implemented
-  - ⏳ `local-maf-with-a2a`: Planned
-  - ⏳ `local-maf-with-fas-a2a`: Planned
+- **Scenario Coverage**: 7 scenarios planned across hosting and agent patterns
+  - ✅ `local-maf`: Local, single-agent
+  - ✅ `maf-with-fas`: Cloud, single-agent
+  - ✅ `local-maf-multiagent`: Local, multi-agent with Magentic
+  - ⏳ `maf-with-fas-multiagent`: Cloud, multi-agent
+  - ⏳ `local-maf-with-fas-multiagent`: Hybrid, multi-agent
+  - ⏳ `local-maf-multiagent-a2a`: Hybrid, multi-agent via A2A
+  - ⏳ `maf-with-fas-multiagent-a2a`: Cloud, multi-agent via A2A
 - **Trace Coverage**: Complete request flow visibility across all scenarios
 - **Metric Richness**: Business and technical KPIs captured per scenario
 - **Dashboard Utility**: Actionable insights comparing scenarios
