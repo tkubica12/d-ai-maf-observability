@@ -1,5 +1,87 @@
 # Implementation Log
 
+## 2025-10-25: Multi-Agent Implementation and Code Refactoring
+
+### Objective
+Implement multi-agent pattern with facilitator + worker architecture and refactor code for better maintainability.
+
+### Multi-Agent Architecture
+
+Implemented facilitator-worker pattern where:
+- **Facilitator Agent**: Front-end agent responsible for user interaction and delegation
+- **Worker Agent**: Specialized agent with API and MCP tools for product queries
+- **Communication**: Direct Python function calls (delegation pattern)
+
+### Code Refactoring
+
+**Motivation**: As more scenarios are added, main.py was growing large (700+ lines). Needed better organization without over-engineering.
+
+**Approach**:
+1. Created `scenarios/` module for scenario implementations
+2. Each scenario in its own file with dedicated class
+3. Main.py retains only:
+   - Global observability setup (needed at module level)
+   - Mock user context utilities
+   - Connection testing
+   - Main entry point and CLI parsing
+
+**New Structure**:
+```
+src/agent/
+  main.py                      # Infrastructure, observability, main()
+  scenarios/
+    __init__.py                # Module exports
+    local_maf.py               # LocalMAFAgent class
+    maf_with_fas.py            # MAFWithFASAgent class
+    local_maf_multiagent.py    # LocalMAFMultiAgent class (NEW)
+```
+
+**Benefits**:
+- Each scenario is self-contained and easier to understand
+- File size manageable as scenarios grow
+- Clear separation of concerns
+- No complex abstractions - simple class-per-file
+
+### Scenario: local-maf-multiagent
+
+**Pattern**: Facilitator + Worker
+- Facilitator uses `delegate_to_worker` tool (wrapped worker agent call)
+- Worker has API and MCP tools
+- Both agents use AzureOpenAIResponsesClient (local execution)
+
+**Telemetry**:
+- Custom spans with `agent.role` attribute (facilitator/worker)
+- `scenario_type` = "multi-agent"
+- `agent.pattern` = "facilitator-worker"
+
+**Example Flow**:
+1. User → Facilitator: "What's the product of the day?"
+2. Facilitator → Worker (via delegate_to_worker tool)
+3. Worker → API Tool: get_product_of_the_day()
+4. Worker → MCP Tool: stock_lookup(product_id)
+5. Worker → Facilitator: Combined result
+6. Facilitator → User: Friendly response
+
+### Design Decisions
+
+**Multi-Agent Roadmap** (updated in DESIGN.md):
+- ✅ `local-maf-multiagent`: Direct Python calls (implemented)
+- ⏳ `local-maf-with-a2a`: Worker as A2A service, facilitator local (planned)
+- ⏳ `local-maf-with-fas-a2a`: Facilitator in FAS, worker as A2A (planned)
+
+**Why not extract observability setup?**
+OpenTelemetry configuration must run at module-level before agent imports. Keeping it in main.py maintains clarity about initialization order.
+
+**Why not extract test_connections?**
+Simple utility function used only by main(). No benefit to extracting.
+
+### Testing
+
+Validated both refactored existing scenarios and new multi-agent scenario:
+- `local-maf`: ✅ Works correctly
+- `local-maf-multiagent`: ✅ Facilitator delegates to worker successfully
+- Telemetry: ✅ Proper span hierarchies and attributes
+
 ## 2025-10-20: Basic Service Implementation
 
 ### Objective

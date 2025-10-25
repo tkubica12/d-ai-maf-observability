@@ -24,25 +24,31 @@ Demonstrate comprehensive observability capabilities for Microsoft Agent Framewo
    - Foundry handles orchestration, state management, scaling
    - Use case: Production deployments, enterprise scenarios, managed infrastructure
 
-#### Planned Scenarios
+#### Multi-Agent Scenarios
 
-3. **Local Microsoft Agent Framework multi-agent with API and MCP tools** (`local-maf-multiagent`)
-   - Multiple local agents collaborating
-   - Agent-to-agent communication patterns
-   - Shared tool access (API and MCP)
-   - Use case: Complex workflows, specialized agent roles
+**Architecture Decision**: Facilitator + Worker pattern
+- **Facilitator Agent**: Front-end agent responsible for user interaction, routing, and response synthesis
+- **Worker Agent**: Existing agent with API and MCP tools (specialized in product queries and stock lookup)
+- **Communication**: Facilitator delegates to worker, worker returns results, facilitator presents to user
 
-4. **MAF with Foundry Agent Service multi-agent and API and MCP tools** (`maf-with-fas-multiagent`)
-   - Multiple agents managed by Foundry Agent Service
-   - Enterprise-scale multi-agent orchestration
-   - Centralized state and lifecycle management
-   - Use case: Large-scale production multi-agent systems
+3. **Local Microsoft Agent Framework multi-agent** (`local-maf-multiagent`)
+   - Facilitator agent running locally
+   - Worker agent running locally (current implementation)
+   - Direct Python function calls for agent-to-agent communication
+   - Both agents use AzureOpenAIResponsesClient
+   - Use case: Development, testing multi-agent patterns
 
-5. **MAF with mix of local and Foundry Agent Service multi-agent** (`local-maf-with-fas-multiagent`)
-   - Hybrid approach: some agents local, some in Foundry
-   - Flexibility in deployment and control
-   - Bridge between development and production
-   - Use case: Migration scenarios, hybrid architectures
+4. **Local MAF with Agent-to-Agent (A2A) protocol** (`local-maf-with-a2a`)
+   - Facilitator agent running locally
+   - Worker agent packaged as A2A service (HTTP/REST interface)
+   - Standardized agent communication via A2A protocol
+   - Use case: Testing production-ready agent interfaces locally
+
+5. **MAF with Foundry Agent Service calling A2A** (`local-maf-with-fas-a2a`)
+   - Facilitator agent hosted in Foundry Agent Service
+   - Worker agent as A2A service
+   - Foundry handles facilitator lifecycle and scaling
+   - Use case: Production deployment with managed facilitator, independent worker services
 
 ### Telemetry Collection Strategy
 - **Traces**: Request flows, agent interactions, tool executions, service calls
@@ -108,12 +114,12 @@ Mock user data for realistic observability scenarios:
 - MCP tool integration with dynamic parameter handling ✅
 - Conditional observability (OTEL on/off) ✅
 
-### Phase 2: Multi-Agent Patterns (Planned)
-- `local-maf-multiagent`: Multiple agents running locally
-- `maf-with-fas-multiagent`: Multiple agents in Foundry
-- `local-maf-with-fas-multiagent`: Hybrid multi-agent architecture
-- Agent collaboration patterns
+### Phase 2: Multi-Agent Patterns (In Progress)
+- ✅ `local-maf-multiagent`: Facilitator + worker pattern with direct calls
+- ⏳ `local-maf-with-a2a`: Worker as A2A service, facilitator local
+- ⏳ `local-maf-with-fas-a2a`: Worker as A2A service, facilitator in Foundry
 - Enhanced telemetry for multi-agent scenarios
+- Agent collaboration patterns and metrics
 
 ### Phase 3: Advanced Observability (Planned)
 - Custom metrics and dashboards per scenario
@@ -195,9 +201,9 @@ Agent Pod → Workload Identity → Azure AI Services (authenticated)
 - **Scenario Coverage**: All 5 scenarios implemented and instrumented
   - ✅ `local-maf`: Implemented
   - ✅ `maf-with-fas`: Implemented
-  - ⏳ `local-maf-multiagent`: Planned
-  - ⏳ `maf-with-fas-multiagent`: Planned
-  - ⏳ `local-maf-with-fas-multiagent`: Planned
+  - ✅ `local-maf-multiagent`: Implemented
+  - ⏳ `local-maf-with-a2a`: Planned
+  - ⏳ `local-maf-with-fas-a2a`: Planned
 - **Trace Coverage**: Complete request flow visibility across all scenarios
 - **Metric Richness**: Business and technical KPIs captured per scenario
 - **Dashboard Utility**: Actionable insights comparing scenarios

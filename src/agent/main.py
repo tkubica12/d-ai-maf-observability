@@ -1,47 +1,43 @@
 """
 Unified MAF Agent demonstrating multiple observability scenarios.
 
-Refactored to use native MAF MCP support:
-- MCPStreamableHTTPTool for local-maf scenario
-- HostedMCPTool for maf-with-fas scenario
+Scenarios are organized in separate modules under scenarios/ for better maintainability.
 
 Implemented Scenarios:
 1. local-maf: Local Microsoft Agent Framework with API and MCP tools
 2. maf-with-fas: Microsoft Agent Framework with Foundry Agent Service with API and MCP tools
+3. local-maf-multiagent: Local MAF multi-agent with facilitator + worker pattern
 
 Planned Scenarios:
-3. local-maf-multiagent: Local Microsoft Agent Framework multi-agent with API and MCP tools
-4. maf-with-fas-multiagent: MAF with Foundry Agent Service multi-agent and API and MCP tools
-5. local-maf-with-fas-multiagent: MAF with mix of local and Foundry Agent Service multi-agent
+4. local-maf-with-a2a: MAF with worker as A2A service
+5. local-maf-with-fas-a2a: Foundry-hosted facilitator calling A2A worker
 
 This agent demonstrates:
 - API function calling to get product of the day
 - Native MCP tool integration for stock lookup
+- Multi-agent collaboration patterns
 - Sequential testing of scenarios
-- Network-based tool integration
 - OpenTelemetry instrumentation with message content logging
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import random
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 import uuid
 
 import httpx
 from dotenv import load_dotenv
 from fastmcp import Client
 
-from agent_framework import ChatAgent, ai_function, MCPStreamableHTTPTool, HostedMCPTool
-from agent_framework.azure import AzureAIAgentClient, AzureOpenAIResponsesClient
 from agent_framework.observability import get_tracer, get_meter, setup_observability
-from azure.identity import DefaultAzureCredential
-from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
+
+# Import scenario implementations
+from scenarios import LocalMAFAgent, MAFWithFASAgent, LocalMAFMultiAgent
 
 load_dotenv()
 
@@ -210,370 +206,7 @@ async def test_connections(api_server_url: str, mcp_server_url: str) -> bool:
     return api_ok and mcp_ok
 
 
-class LocalMAFAgent:
-    """Local Microsoft Agent Framework with API and MCP tools (local-maf)."""
-
-    def __init__(
-        self,
-        ai_endpoint: str,
-        model_name: str,
-        api_server_url: str,
-        mcp_server_url: str,
-    ) -> None:
-        self.ai_endpoint = ai_endpoint
-        self.model_name = model_name
-        self.api_server_url = api_server_url.rstrip("/")
-        self.mcp_server_url = mcp_server_url.rstrip("/")
-
-    def _create_api_tool(self):
-        """Create API tool for getting product of the day."""
-        api_url = self.api_server_url
-
-        @ai_function(
-            name="get_product_of_the_day",
-            description="Get a randomly selected product of the day from the API server",
-        )
-        async def get_product_of_the_day() -> Dict[str, Any]:
-            print(f"🔧 Tool call: get_product_of_the_day()")
-            logger.info("Tool call", extra={"tool_name": "get_product_of_the_day", "arguments": {}})
-            
-            if tracer:
-                span = tracer.start_as_current_span("tool.get_product_of_the_day")
-            else:
-                from contextlib import nullcontext
-                span = nullcontext()
-                
-            with span as s:
-                if s:
-                    s.set_attribute("tool.name", "get_product_of_the_day")
-                
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{api_url}/product-of-the-day",
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    result = response.json()
-                    
-                    if s:
-                        s.set_attribute("tool.result", json.dumps(result)[:500])
-                    
-                    print(f"📥 Tool result (get_product_of_the_day): {result}")
-                    logger.info("Tool result", extra={"tool_name": "get_product_of_the_day", "result": result})
-                    return result
-
-        return get_product_of_the_day
-
-    async def run(self) -> None:
-        """Run local MAF agent with API and MCP tools."""
-        print("\n" + "=" * 80)
-        print("🔄 Local Microsoft Agent Framework with API and MCP tools")
-        print("   Scenario ID: local-maf")
-        print("=" * 80)
-
-        # Generate mock user context
-        user_context = get_mock_user_context()
-        print(f"👤 User Context: {user_context['user_id']} (VIP: {user_context['is_vip']}, Dept: {user_context['department']})")
-        print(f"🧵 Thread ID: {user_context['thread_id']}")
-        
-        logger.info(
-            "Starting local-maf scenario",
-            extra={
-                "scenario_id": "local-maf",
-                "user_id": user_context["user_id"],
-                "is_vip": user_context["is_vip"],
-                "department": user_context["department"],
-                "thread_id": user_context["thread_id"]
-            }
-        )
-
-        credential = DefaultAzureCredential()
-        
-        # Use AzureOpenAIResponsesClient for Azure OpenAI Responses API
-        responses_client = AzureOpenAIResponsesClient(
-            endpoint=self.ai_endpoint,
-            deployment_name=self.model_name,
-            api_version="preview",
-            credential=credential,
-        )
-
-        print("✅ Connected to Azure OpenAI Responses API")
-        print(f"🤖 Using model: {self.model_name}")
-        logger.info("Connected to Azure OpenAI Responses API", extra={"model": self.model_name})
-
-        # Create API tool
-        api_tool = self._create_api_tool()
-        
-        # Create MCP tool using native MCPStreamableHTTPTool
-        print(f"🔌 Connecting to MCP server at {self.mcp_server_url}/mcp")
-        mcp_tool = MCPStreamableHTTPTool(
-            name="stock_lookup_mcp",
-            url=f"{self.mcp_server_url}/mcp",
-        )
-        
-        # Note: MCPStreamableHTTPTool is a context manager
-        async with mcp_tool:
-            print("✅ Connected to MCP server (MCPStreamableHTTPTool)")
-            logger.info("Connected to MCP server using MCPStreamableHTTPTool")
-            
-            # Create agent with both tools
-            agent = responses_client.create_agent(
-                instructions="""You are a helpful assistant that can get product information and stock levels.
-
-Your task is to:
-1. Get the product of the day
-2. Use the product description in your response
-3. Look up the stock level for that product using its product_id
-4. Provide a comprehensive response including product details and availability
-
-Always use the available functions to get current data.""",
-                name="ProductInfoAgent",
-                tools=[api_tool, mcp_tool],
-            )
-
-            user_message = "What's the product of the day and is it in stock?"
-            print(f"\n📤 User: {user_message}")
-            logger.info("User message", extra={"user_message": user_message, "scenario": "local-maf"})
-
-            print("\n🤖 Making LLM call with Agent Framework (AzureOpenAIResponsesClient)...")
-            logger.info("Starting agent execution")
-            
-            # Record custom metric with dimensions
-            if agent_call_counter:
-                demo_value = random.randint(1, 100)
-                agent_call_counter.add(
-                    demo_value,
-                    attributes={
-                        "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
-                        "user_id": user_context["user_id"],
-                        "is_vip": str(user_context["is_vip"]).lower(),
-                        "department": user_context["department"],
-                        "thread_id": user_context["thread_id"],
-                        "scenario_id": "local-maf",
-                        "scenario_type": "single-agent",
-                    }
-                )
-                print(f"📊 Custom metric recorded: custom_agent_call_count={demo_value}")
-                logger.info(
-                    "Custom metric recorded",
-                    extra={
-                        "metric_name": "custom_agent_call_count",
-                        "metric_value": demo_value,
-                        "user_id": user_context["user_id"],
-                        "scenario": "local-maf"
-                    }
-                )
-            
-            # Add custom dimensions to the span
-            if tracer:
-                with tracer.start_as_current_span("scenario.local-maf") as span:
-                    span.set_attribute("user_id", user_context["user_id"])
-                    span.set_attribute("is_vip", user_context["is_vip"])
-                    span.set_attribute("department", user_context["department"])
-                    span.set_attribute("thread_id", user_context["thread_id"])
-                    span.set_attribute("scenario_id", "local-maf")
-                    span.set_attribute("scenario_type", "single-agent")
-                    
-                    response = await agent.run(user_message)
-            else:
-                response = await agent.run(user_message)
-
-            # Extract text from response
-            if hasattr(response, "text"):
-                final_text = response.text
-            elif hasattr(response, "content"):
-                final_text = response.content
-            else:
-                final_text = str(response)
-
-            print(f"\n📨 Assistant: {final_text}")
-            logger.info("Agent response", extra={"response": final_text[:200], "scenario": "local-maf"})
-
-
-class MAFWithFASAgent:
-    """Microsoft Agent Framework with Foundry Agent Service and API and MCP tools (maf-with-fas)."""
-
-    def __init__(
-        self,
-        project_endpoint: str,
-        model_deployment: str,
-        api_server_url: str,
-        mcp_server_url: str,
-    ) -> None:
-        self.project_endpoint = project_endpoint
-        self.model_deployment = model_deployment
-        self.api_server_url = api_server_url.rstrip("/")
-        self.mcp_server_url = mcp_server_url.rstrip("/")
-
-    def _create_api_tool(self):
-        """Create API tool for getting product of the day."""
-        api_url = self.api_server_url
-
-        @ai_function(
-            name="get_product_of_the_day",
-            description="Get a randomly selected product of the day from the API server",
-        )
-        async def get_product_of_the_day() -> Dict[str, Any]:
-            print(f"🔧 Tool call: get_product_of_the_day()")
-            logger.info("Tool call", extra={"tool_name": "get_product_of_the_day", "arguments": {}})
-            
-            if tracer:
-                span = tracer.start_as_current_span("tool.get_product_of_the_day")
-            else:
-                from contextlib import nullcontext
-                span = nullcontext()
-                
-            with span as s:
-                if s:
-                    s.set_attribute("tool.name", "get_product_of_the_day")
-                
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{api_url}/product-of-the-day",
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    result = response.json()
-                    
-                    if s:
-                        s.set_attribute("tool.result", json.dumps(result)[:500])
-                    
-                    print(f"📥 Tool result (get_product_of_the_day): {result}")
-                    logger.info("Tool result", extra={"tool_name": "get_product_of_the_day", "result": result})
-                    return result
-
-        return get_product_of_the_day
-
-    async def run(self) -> None:
-        """Run MAF with Foundry Agent Service and API and MCP tools."""
-        print("\n" + "=" * 80)
-        print("🔄 Microsoft Agent Framework with Foundry Agent Service")
-        print("   Scenario ID: maf-with-fas")
-        print("=" * 80)
-
-        # Generate mock user context
-        user_context = get_mock_user_context()
-        print(f"👤 User Context: {user_context['user_id']} (VIP: {user_context['is_vip']}, Dept: {user_context['department']})")
-        print(f"🧵 Thread ID: {user_context['thread_id']}")
-        
-        logger.info(
-            "Starting maf-with-fas scenario",
-            extra={
-                "scenario_id": "maf-with-fas",
-                "user_id": user_context["user_id"],
-                "is_vip": user_context["is_vip"],
-                "department": user_context["department"],
-                "thread_id": user_context["thread_id"]
-            }
-        )
-
-        # AzureAIAgentClient requires async credential
-        async with AsyncDefaultAzureCredential() as credential:
-            agent_client = AzureAIAgentClient(
-                project_endpoint=self.project_endpoint,
-                model_deployment_name=self.model_deployment,
-                async_credential=credential,
-            )
-
-            print("✅ Connected to Azure AI Project")
-            print(f"🤖 Using model: {self.model_deployment}")
-            logger.info("Connected to Azure AI Project", extra={"model": self.model_deployment})
-
-            # Create API tool
-            api_tool = self._create_api_tool()
-            
-            # Create MCP tool using HostedMCPTool for Foundry Agent Service
-            # Note: FastMCP mounts at /mcp and creates endpoint at /mcp, so full path is /mcp/mcp
-            print(f"🔌 Configuring Hosted MCP tool at {self.mcp_server_url}/mcp")
-            mcp_tool = HostedMCPTool(
-                name="stock_lookup_mcp",
-                url=f"{self.mcp_server_url}/mcp",
-            )
-            
-            print("✅ Hosted MCP tool configured for Foundry Agent Service")
-            logger.info("Hosted MCP tool configured for Foundry Agent Service")
-
-            instructions = """You are a helpful assistant that provides product information and stock levels.
-
-Your task is to:
-1. Get the product of the day from the API
-2. Use the product description in your response
-3. Look up the stock level for that product using its product_id via MCP
-4. Provide a comprehensive response including product details and availability
-
-Always use both API and MCP tools to provide complete information."""
-
-            # Use agent as context manager to properly close sessions
-            async with agent_client.create_agent(
-                name="Product Info Agent",
-                instructions=instructions,
-                tools=[api_tool, mcp_tool],
-            ) as agent:
-                print("✅ Agent created (using Foundry Agent Service)")
-                logger.info("Agent created using Foundry Agent Service")
-
-                user_message = "What's the product of the day and is it in stock?"
-                print(f"\n📤 User: {user_message}")
-                logger.info("User message", extra={"user_message": user_message, "scenario": "maf-with-fas"})
-
-                print("\n🤖 Agent processing...")
-                logger.info("Starting agent execution")
-                
-                # Record custom metric with dimensions
-                if agent_call_counter:
-                    demo_value = random.randint(1, 100)
-                    agent_call_counter.add(
-                        demo_value,
-                        attributes={
-                            "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
-                            "user_id": user_context["user_id"],
-                            "is_vip": str(user_context["is_vip"]).lower(),
-                            "department": user_context["department"],
-                            "thread_id": user_context["thread_id"],
-                            "scenario_id": "maf-with-fas",
-                            "scenario_type": "single-agent",
-                        }
-                    )
-                    print(f"📊 Custom metric recorded: custom_agent_call_count={demo_value}")
-                    logger.info(
-                        "Custom metric recorded",
-                        extra={
-                            "metric_name": "custom_agent_call_count",
-                            "metric_value": demo_value,
-                            "user_id": user_context["user_id"],
-                            "scenario": "maf-with-fas"
-                        }
-                    )
-                
-                # Add custom dimensions to the span
-                if tracer:
-                    with tracer.start_as_current_span("scenario.maf-with-fas") as span:
-                        span.set_attribute("user_id", user_context["user_id"])
-                        span.set_attribute("is_vip", user_context["is_vip"])
-                        span.set_attribute("department", user_context["department"])
-                        span.set_attribute("thread_id", user_context["thread_id"])
-                        span.set_attribute("scenario_id", "maf-with-fas")
-                        span.set_attribute("scenario_type", "single-agent")
-                        
-                        # Set store=True for service-managed threads
-                        response = await agent.run(user_message, store=True)
-                else:
-                    # Set store=True for service-managed threads
-                    response = await agent.run(user_message, store=True)
-
-                # Extract text from response
-                if hasattr(response, "text"):
-                    final_text = response.text
-                elif hasattr(response, "content"):
-                    final_text = response.content
-                else:
-                    final_text = str(response)
-
-                print(f"\n📨 Assistant: {final_text}")
-                logger.info("Agent response", extra={"response": final_text[:200], "scenario": "maf-with-fas"})
-
-
-async def main(scenarios: Optional[List[str]] = None) -> None:
+async def main(scenarios: list[str] | None = None) -> None:
     """Main entry point for unified agent testing."""
     print("🚀 Starting Unified MAF Agent Testing")
     print("=" * 80)
@@ -605,38 +238,68 @@ async def main(scenarios: Optional[List[str]] = None) -> None:
         # Scenario 1: Local Microsoft Agent Framework with API and MCP tools
         if should_run("local-maf"):
             if ai_endpoint:
-                local_maf_agent = LocalMAFAgent(ai_endpoint, model_name, api_server_url, mcp_server_url)
+                local_maf_agent = LocalMAFAgent(
+                    ai_endpoint=ai_endpoint,
+                    model_name=model_name,
+                    api_server_url=api_server_url,
+                    mcp_server_url=mcp_server_url,
+                    tracer=tracer,
+                    meter=meter,
+                    agent_call_counter=agent_call_counter,
+                    get_mock_user_context=get_mock_user_context,
+                )
                 await local_maf_agent.run()
             else:
                 print("\n⚠️  AI_ENDPOINT not configured, skipping local-maf scenario")
                 logger.warning("AI_ENDPOINT not configured, skipping local-maf scenario")
 
         # If running multiple scenarios, wait a bit between them
-        if run_all:
+        if run_all or (scenarios is not None and len(scenarios) > 1 and should_run("maf-with-fas")):
             print("\n" + "." * 80)
             print("⏳ Waiting 3 seconds before next scenario...")
             await asyncio.sleep(3)
-        else:
-            # If user explicitly requested multiple scenarios (space/comma separated) and included both,
-            # give a short pause between user-requested scenarios as well.
-            if scenarios is not None and len(scenarios) > 1:
-                print("\n" + "." * 80)
-                print("⏳ Waiting 3 seconds before next scenario...")
-                await asyncio.sleep(3)
 
         # Scenario 2: Microsoft Agent Framework with Foundry Agent Service and API and MCP tools
         if should_run("maf-with-fas"):
             if project_endpoint:
-                maf_with_fas_agent = MAFWithFASAgent(project_endpoint, model_deployment, api_server_url, mcp_server_url)
+                maf_with_fas_agent = MAFWithFASAgent(
+                    project_endpoint=project_endpoint,
+                    model_deployment=model_deployment,
+                    api_server_url=api_server_url,
+                    mcp_server_url=mcp_server_url,
+                    tracer=tracer,
+                    meter=meter,
+                    agent_call_counter=agent_call_counter,
+                    get_mock_user_context=get_mock_user_context,
+                )
                 await maf_with_fas_agent.run()
             else:
                 print("\n⚠️  PROJECT_ENDPOINT not configured, skipping maf-with-fas scenario")
                 logger.warning("PROJECT_ENDPOINT not configured, skipping maf-with-fas scenario")
 
-        # TODO: Implement additional scenarios
-        # Scenario 3: Local Microsoft Agent Framework multi-agent (local-maf-multiagent)
-        # Scenario 4: MAF with Foundry Agent Service multi-agent (maf-with-fas-multiagent)
-        # Scenario 5: MAF with mix of local and Foundry Agent Service multi-agent (local-maf-with-fas-multiagent)
+        # If running multiple scenarios, wait a bit between them
+        if run_all or (scenarios is not None and len(scenarios) > 1 and should_run("local-maf-multiagent")):
+            print("\n" + "." * 80)
+            print("⏳ Waiting 3 seconds before next scenario...")
+            await asyncio.sleep(3)
+
+        # Scenario 3: Local Microsoft Agent Framework multi-agent with facilitator + worker pattern
+        if should_run("local-maf-multiagent"):
+            if ai_endpoint:
+                local_maf_multiagent = LocalMAFMultiAgent(
+                    ai_endpoint=ai_endpoint,
+                    model_name=model_name,
+                    api_server_url=api_server_url,
+                    mcp_server_url=mcp_server_url,
+                    tracer=tracer,
+                    meter=meter,
+                    agent_call_counter=agent_call_counter,
+                    get_mock_user_context=get_mock_user_context,
+                )
+                await local_maf_multiagent.run()
+            else:
+                print("\n⚠️  AI_ENDPOINT not configured, skipping local-maf-multiagent scenario")
+                logger.warning("AI_ENDPOINT not configured, skipping local-maf-multiagent scenario")
 
         print("\n" + "=" * 80)
         print("✅ All requested scenarios completed successfully!")
@@ -662,7 +325,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         # Available scenario IDs implemented in this script
-        available_scenarios = ["local-maf", "maf-with-fas"]
+        available_scenarios = ["local-maf", "maf-with-fas", "local-maf-multiagent"]
 
         scenario_list = None
         # args.scenarios is None when the user did not pass -s at all -> run all
@@ -698,10 +361,5 @@ if __name__ == "__main__":
         # Run main with optional scenarios list
         asyncio.run(main(scenarios=scenario_list))
     except KeyboardInterrupt:
-        print("\n\n⚠️  Testing interrupted by user")
-        logger.warning("Testing interrupted by user")
-        sys.exit(0)
-    except Exception as exc:  # noqa: BLE001
-        print(f"\n❌ Fatal error: {exc}")
-        logger.error("Fatal error", exc_info=exc)
-        sys.exit(1)
+        print("\n\n⚠️  Interrupted by user")
+        sys.exit(130)
