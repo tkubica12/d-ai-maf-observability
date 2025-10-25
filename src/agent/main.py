@@ -4,13 +4,13 @@ Unified MAF Agent demonstrating multiple observability scenarios.
 Scenarios are organized in separate modules under scenarios/ for better maintainability.
 
 Implemented Scenarios:
-1. local-maf: Local Microsoft Agent Framework with API and MCP tools
-2. maf-with-fas: Microsoft Agent Framework with Foundry Agent Service with API and MCP tools
-3. local-maf-multiagent: Local MAF multi-agent with facilitator + worker pattern
+- local-maf: Local Microsoft Agent Framework with API and MCP tools
+- maf-with-fas: Microsoft Agent Framework with Foundry Agent Service with API and MCP tools
+- local-maf-multiagent: Local MAF multi-agent with facilitator + worker pattern
 
 Planned Scenarios:
-4. local-maf-with-a2a: MAF with worker as A2A service
-5. local-maf-with-fas-a2a: Foundry-hosted facilitator calling A2A worker
+- local-maf-with-a2a: MAF with worker as A2A service
+- local-maf-with-fas-a2a: Foundry-hosted facilitator calling A2A worker
 
 This agent demonstrates:
 - API function calling to get product of the day
@@ -235,7 +235,7 @@ async def main(scenarios: list[str] | None = None) -> None:
         def should_run(name: str) -> bool:
             return run_all or (scenarios is not None and name in scenarios)
 
-        # Scenario 1: Local Microsoft Agent Framework with API and MCP tools
+        # local-maf: Local Microsoft Agent Framework with API and MCP tools
         if should_run("local-maf"):
             if ai_endpoint:
                 local_maf_agent = LocalMAFAgent(
@@ -259,12 +259,14 @@ async def main(scenarios: list[str] | None = None) -> None:
             print("⏳ Waiting 3 seconds before next scenario...")
             await asyncio.sleep(3)
 
-        # Scenario 2: Microsoft Agent Framework with Foundry Agent Service and API and MCP tools
+        # maf-with-fas: Microsoft Agent Framework with Foundry Agent Service and API and MCP tools
         if should_run("maf-with-fas"):
             if project_endpoint:
+                # TODO: Remove hardcoded model when FAS supports gpt-5-nano with MCP
+                # Currently FAS with MCP requires gpt-4.1-mini as a workaround
                 maf_with_fas_agent = MAFWithFASAgent(
                     project_endpoint=project_endpoint,
-                    model_deployment=model_deployment,
+                    model_deployment="gpt-4.1-mini",  # Hardcoded workaround for FAS + MCP
                     api_server_url=api_server_url,
                     mcp_server_url=mcp_server_url,
                     tracer=tracer,
@@ -283,7 +285,7 @@ async def main(scenarios: list[str] | None = None) -> None:
             print("⏳ Waiting 3 seconds before next scenario...")
             await asyncio.sleep(3)
 
-        # Scenario 3: Local Microsoft Agent Framework multi-agent with facilitator + worker pattern
+        # local-maf-multiagent: Local Microsoft Agent Framework multi-agent with facilitator + worker pattern
         if should_run("local-maf-multiagent"):
             if ai_endpoint:
                 local_maf_multiagent = LocalMAFMultiAgent(

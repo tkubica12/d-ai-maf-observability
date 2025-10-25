@@ -44,6 +44,31 @@ resource "azapi_resource" "ai_model_deployment" {
   }
 }
 
+# TODO: Remove when FAS supports gpt-5-nano with MCP
+# Hardcoded gpt-4.1-mini deployment as workaround for FAS + MCP compatibility
+resource "azapi_resource" "ai_model_deployment_workaround" {
+  type      = "Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview"
+  name      = "gpt-4.1-mini"
+  parent_id = azapi_resource.ai_services.id
+
+  body = {
+    sku = {
+      name     = "GlobalStandard"
+      capacity = 100
+    }
+    properties = {
+      model = {
+        format  = "OpenAI"
+        name    = "gpt-4.1-mini"
+        version = "2025-04-14"
+      }
+      versionUpgradeOption = "OnceCurrentVersionExpired"
+    }
+  }
+
+  depends_on = [azapi_resource.ai_model_deployment]
+}
+
 resource "azapi_resource" "ai_project" {
   type      = "Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview"
   name      = "${var.project_name}-project"

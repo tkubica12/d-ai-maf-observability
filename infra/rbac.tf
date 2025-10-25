@@ -31,6 +31,8 @@ resource "random_uuid" "current_user_cognitive_services_openai_user_role_id" {}
 resource "random_uuid" "current_user_cognitive_services_contributor_role_id" {}
 resource "random_uuid" "aks_network_contributor_role_id" {}
 resource "random_uuid" "aks_managed_identity_operator_role_id" {}
+resource "random_uuid" "aks_acr_role_id" {}
+resource "random_uuid" "grafana_prometheus_reader_role_id" {}
 
 # Role assignment for Azure AI Services access - Cognitive Services User
 resource "azapi_resource" "cognitive_services_user_role_assignment" {
@@ -144,7 +146,7 @@ resource "azapi_resource" "aks_network_contributor_role" {
 
   body = {
     properties = {
-      roleDefinitionId = "${azapi_resource.rg.id}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7"
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7"
       principalId      = azapi_resource.aks_identity.output.properties.principalId
       principalType    = "ServicePrincipal"
     }

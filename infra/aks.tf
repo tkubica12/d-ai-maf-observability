@@ -79,7 +79,7 @@ resource "azapi_resource" "aks" {
 
 resource "azapi_resource" "aks_acr_role" {
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = uuid()
+  name      = random_uuid.aks_acr_role_id.result
   parent_id = azapi_resource.acr.id
 
   body = {
