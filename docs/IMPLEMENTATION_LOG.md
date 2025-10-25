@@ -1,5 +1,97 @@
 # Implementation Log
 
+## 2025-10-25: Azure Monitor Prometheus Remote Write with Sidecar Container
+
+### Objective
+Complete the Azure Monitor Prometheus remote write integration by implementing the Microsoft-recommended sidecar container pattern for Azure AD authentication.
+
+### Problem
+The OpenTelemetry Collector's `prometheusremotewrite` exporter doesn't natively support Azure AD token acquisition and refresh. Azure Monitor Prometheus requires OAuth2 Bearer tokens in the Authorization header.
+
+### Solution: Sidecar Container Pattern
+
+Implemented Microsoft's recommended approach using a sidecar container that:
+1. Obtains Azure AD tokens using workload identity
+2. Provides a local HTTP proxy (localhost:8081)
+3. Injects Authorization headers automatically
+4. Handles token refresh
+
+### Implementation Details
+
+**Sidecar Container Configuration**:
+- Image: `mcr.microsoft.com/azuremonitor/containerinsights/ciprod/prometheus-remote-write/images:prom-remotewrite-20250814.1`
+- Environment variables:
+  - `INGESTION_URL`: Azure Monitor DCE metrics ingestion endpoint
+  - `LISTENING_PORT`: 8081
+  - `IDENTITY_TYPE`: workloadIdentity
+  - `CLUSTER`: AKS cluster name
+- Health probes: /health and /ready endpoints
+
+**OTEL Collector Changes**:
+- Changed endpoint from direct Azure Monitor URL to `http://localhost:8081/api/v1/write`
+- Changed TLS setting to `insecure: true` (localhost communication)
+- Both containers share the same pod and service account
+
+**Infrastructure** (already in place):
+- Azure Workload Identity federated credential linking K8s service account to managed identity
+- Monitoring Metrics Publisher role on Data Collection Rule
+- Service account annotations for workload identity
+
+### Files Modified
+
+1. **charts/maf_demo/templates/otel-collector.yaml**
+   - Updated prometheusremotewrite exporter endpoint to localhost sidecar
+   - Added prom-remotewrite sidecar container to deployment
+   - Configured health probes and environment variables
+
+2. **charts/maf_demo/values.yaml**
+   - Added `clusterName` field for sidecar configuration
+
+3. **infra/helm.demo.tf**
+   - Pass AKS cluster name to Helm chart
+
+4. **docs/APPLICATION_INSIGHTS_OTEL.md**
+   - Updated documentation to reflect complete implementation
+   - Removed "Current Limitation" section
+   - Added "How It Works" section explaining the flow
+
+### Architecture Flow
+
+```
+OTEL Collector (port 4317/4318)
+     │
+     │ Exports metrics
+     ▼
+Sidecar Container (localhost:8081)
+     │ 
+     │ 1. Receives Prometheus remote write request
+     │ 2. Obtains Azure AD token (workload identity)
+     │ 3. Injects Authorization header
+     │ 4. Forwards to Azure Monitor
+     ▼
+Azure Monitor DCE Endpoint
+     │
+     ▼
+Data Collection Rule
+     │
+     ▼
+Azure Monitor Workspace (Prometheus)
+```
+
+### Testing Next Steps
+
+1. Apply Terraform/Helm changes to deploy updated configuration
+2. Verify sidecar container starts successfully
+3. Check sidecar logs for token acquisition
+4. Verify metrics flow to Azure Monitor Prometheus workspace
+5. Query metrics in Grafana or Azure portal
+
+### References
+
+- [Microsoft Docs: Prometheus Remote Write with Workload Identity](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/prometheus-remote-write-azure-workload-identity)
+
+---
+
 ## 2025-10-25: Multi-Agent Implementation and Code Refactoring
 
 ### Objective

@@ -66,6 +66,8 @@ resource "azapi_resource" "grafana" {
   }
 }
 
+resource "random_uuid" "grafana_prometheus_reader_role_id" {}
+
 resource "azapi_resource" "grafana_prometheus_reader_role" {
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
   name      = random_uuid.grafana_prometheus_reader_role_id.result
@@ -138,6 +140,23 @@ resource "azapi_resource" "prometheus_dcr_association" {
   body = {
     properties = {
       dataCollectionRuleId = azapi_resource.prometheus_data_collection_rule.id
+    }
+  }
+}
+
+# Assign Monitoring Metrics Publisher role to user-assigned identity for OTEL collector remote write
+resource "random_uuid" "otel_prometheus_publisher_role_id" {}
+
+resource "azapi_resource" "otel_prometheus_publisher_role" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.otel_prometheus_publisher_role_id.result
+  parent_id = azapi_resource.prometheus_data_collection_rule.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/3913510d-42f4-4e42-8a64-420c390055eb"
+      principalId      = azapi_resource.user_assigned_identity.output.properties.principalId
+      principalType    = "ServicePrincipal"
     }
   }
 }

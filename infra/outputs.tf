@@ -70,6 +70,11 @@ output "prometheus_query_endpoint" {
   value       = azapi_resource.prometheus.output.properties.metrics.prometheusQueryEndpoint
 }
 
+output "prometheus_remote_write_endpoint" {
+  description = "Azure Monitor Prometheus remote write ingestion endpoint (full URL with DCR path)"
+  value       = "${azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint}/dataCollectionRules/${azapi_resource.prometheus_data_collection_rule.output.properties.immutableId}/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
+}
+
 output "vnet_id" {
   description = "Resource ID of the virtual network"
   value       = azapi_resource.vnet.id

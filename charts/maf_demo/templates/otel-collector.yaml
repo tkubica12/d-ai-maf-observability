@@ -35,21 +35,48 @@ data:
         endpoint: {{ include "maf-demo.fullname" . }}-aspire-dashboard:18889
         tls:
           insecure: true
+      
+      # Azure Monitor exporter for Application Insights
+      # Supports traces and logs (metrics not supported by App Insights OTLP ingestion)
+      azuremonitor:
+        connection_string: {{ .Values.appInsights.connectionString | quote }}
+      
+      # Prometheus Remote Write exporter for Azure Monitor Prometheus
+      # Uses sidecar container for Azure AD token management
+      # The sidecar listens on localhost:8081 and injects the Authorization header
+      prometheusremotewrite:
+        endpoint: "http://localhost:8081/api/v1/write"
+        tls:
+          insecure: true
+        resource_to_telemetry_conversion:
+          enabled: true
 
     service:
       pipelines:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [otlp]
+          exporters: [otlp, azuremonitor]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [otlp]
+          exporters: [otlp, prometheusremotewrite]
         logs:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [otlp]
+          exporters: [otlp, azuremonitor]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-otel-collector
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+    azure.workload.identity/use: "true"
+  annotations:
+    azure.workload.identity/client-id: {{ .Values.agent.clientId }}
+    azure.workload.identity/tenant-id: {{ .Values.agent.tenantId }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,7 +94,9 @@ spec:
     metadata:
       labels:
         {{- include "maf-demo.otelCollectorSelectorLabels" . | nindent 8 }}
+        azure.workload.identity/use: "true"
     spec:
+      serviceAccountName: {{ include "maf-demo.fullname" . }}-otel-collector
       containers:
       - name: otel-collector
         image: otel/opentelemetry-collector-contrib:{{ .Values.otelCollector.tag }}
@@ -90,6 +119,44 @@ spec:
           readOnly: true
         resources:
           {{- toYaml .Values.otelCollector.resources | nindent 10 }}
+      # Sidecar container for Azure Monitor Prometheus remote write authentication
+      # This container obtains Azure AD tokens using workload identity and proxies
+      # Prometheus remote write requests with the Authorization header injected
+      - name: prom-remotewrite
+        image: mcr.microsoft.com/azuremonitor/containerinsights/ciprod/prometheus-remote-write/images:prom-remotewrite-20250814.1
+        imagePullPolicy: Always
+        ports:
+        - name: rw-port
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: INGESTION_URL
+          value: {{ .Values.prometheus.remoteWriteEndpoint | quote }}
+        - name: LISTENING_PORT
+          value: "8081"
+        - name: IDENTITY_TYPE
+          value: "workloadIdentity"
+        - name: CLUSTER
+          value: {{ .Values.clusterName | default "aks-cluster" | quote }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: rw-port
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: rw-port
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
       volumes:
       - name: config
         configMap:

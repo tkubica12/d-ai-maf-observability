@@ -63,6 +63,14 @@ otelCollector:
       memory: "512Mi"
       cpu: "500m"
 
+appInsights:
+  connectionString: ""  # Application Insights connection string (set via Terraform)
+
+prometheus:
+  remoteWriteEndpoint: ""  # Azure Monitor Prometheus remote write endpoint (set via Terraform)
+
+clusterName: ""  # AKS cluster name (set via Terraform, used by Prometheus remote write sidecar)
+
 aspireDashboard:
   tag: "9.0"
   resources:

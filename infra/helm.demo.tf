@@ -39,6 +39,13 @@ resource "helm_release" "maf_demo" {
         apiServerUrl = "https://api-tool.${var.base_domain}"
         mcpServerUrl = "https://mcp-tool.${var.base_domain}"
       }
+      appInsights = {
+        connectionString = azapi_resource.app_insights.output.properties.ConnectionString
+      }
+      prometheus = {
+        remoteWriteEndpoint = azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint
+      }
+      clusterName = azapi_resource.aks.name
       ingress = {
         hosts = {
           api = {

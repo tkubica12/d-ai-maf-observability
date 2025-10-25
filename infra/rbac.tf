@@ -22,6 +22,24 @@ resource "azapi_resource" "agent_federated_credential" {
   depends_on = [azapi_resource.aks]
 }
 
+# Federated credential for OTEL collector workload identity in AKS
+# Allows OTEL collector to authenticate with Azure Monitor Prometheus
+resource "azapi_resource" "otel_collector_federated_credential" {
+  type      = "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31"
+  name      = "otel-collector-federated-credential"
+  parent_id = azapi_resource.user_assigned_identity.id
+
+  body = {
+    properties = {
+      audiences = ["api://AzureADTokenExchange"]
+      issuer    = azapi_resource.aks.output.properties.oidcIssuerProfile.issuerURL
+      subject   = "system:serviceaccount:maf-demo:maf-demo-otel-collector"
+    }
+  }
+
+  depends_on = [azapi_resource.aks]
+}
+
 # Generate UUIDs for role assignments
 resource "random_uuid" "cognitive_services_user_role_id" {}
 resource "random_uuid" "cognitive_services_openai_user_role_id" {}
@@ -32,7 +50,6 @@ resource "random_uuid" "current_user_cognitive_services_contributor_role_id" {}
 resource "random_uuid" "aks_network_contributor_role_id" {}
 resource "random_uuid" "aks_managed_identity_operator_role_id" {}
 resource "random_uuid" "aks_acr_role_id" {}
-resource "random_uuid" "grafana_prometheus_reader_role_id" {}
 
 # Role assignment for Azure AI Services access - Cognitive Services User
 resource "azapi_resource" "cognitive_services_user_role_assignment" {
