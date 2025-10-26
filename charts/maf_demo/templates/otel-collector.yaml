@@ -41,6 +41,13 @@ data:
       azuremonitor:
         connection_string: {{ .Values.appInsights.connectionString | quote }}
       
+      # Langfuse OTLP exporter for LLM observability
+      # Exports traces to Langfuse via HTTP/protobuf protocol
+      otlphttp/langfuse:
+        endpoint: {{ .Values.langfuse.endpoint | default "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel" | quote }}
+        headers:
+          Authorization: {{ .Values.langfuse.authorization | default "Basic " | quote }}
+      
       # Prometheus Remote Write exporter for Azure Monitor Prometheus
       # Uses sidecar container for Azure AD token management
       # The sidecar listens on localhost:8081 and injects the Authorization header
@@ -56,7 +63,7 @@ data:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [otlp, azuremonitor]
+          exporters: [otlp, azuremonitor, otlphttp/langfuse]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]

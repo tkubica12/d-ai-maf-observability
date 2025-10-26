@@ -45,6 +45,10 @@ resource "helm_release" "maf_demo" {
       prometheus = {
         remoteWriteEndpoint = azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint
       }
+      langfuse = {
+        endpoint      = "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel"
+        authorization = try(helm_release.langfuse.id != "" ? local.langfuse_auth_header : "", "")
+      }
       clusterName = azapi_resource.aks.name
       ingress = {
         hosts = {

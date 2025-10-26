@@ -1,5 +1,105 @@
 # Implementation Log
 
+## 2025-10-26: Langfuse Integration for LLM Observability
+
+### Objective
+Add Langfuse as a comprehensive LLM observability platform alongside existing Azure Monitor and Aspire Dashboard integrations. Langfuse provides specialized tracking for LLM applications including cost tracking, prompt management, and detailed trace analysis.
+
+### Solution Architecture
+
+Deployed Langfuse via Helm chart and configured OpenTelemetry Collector to export traces to Langfuse's OTLP endpoint, enabling multi-destination telemetry:
+- **Azure Monitor** - Enterprise monitoring and long-term storage
+- **Aspire Dashboard** - Real-time development debugging
+- **Langfuse** - LLM-specific observability with cost tracking and prompt management
+
+### Implementation Details
+
+**1. Langfuse Helm Deployment** (`helm.langfuse.tf`):
+- Repository: https://langfuse.github.io/langfuse-k8s
+- Namespace: `langfuse` (isolated from main application)
+- Components deployed:
+  - **Langfuse web/worker** - Main application (256Mi-1Gi RAM, 200m-1000m CPU)
+  - **PostgreSQL** - Trace storage (10Gi, 256Mi-1Gi RAM)
+  - **ClickHouse** - Analytics database (20Gi, 1Gi-4Gi RAM) with ZooKeeper
+  - **Redis** - Caching layer (5Gi, 128Mi-512Mi RAM)
+  - **MinIO** - Blob storage (20Gi, 512Mi-2Gi RAM)
+
+**2. Ingress Configuration**:
+- Host: `langfuse.{base_domain}`
+- TLS: Let's Encrypt certificate via cert-manager
+- nginx ingress class (shared with other services)
+
+**3. OTEL Collector Integration** (`otel-collector.yaml`):
+- Added `otlphttp/langfuse` exporter:
+  - Endpoint: `http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel`
+  - Protocol: HTTP/protobuf (Langfuse doesn't support gRPC)
+  - Authorization: Basic auth (configurable via values)
+- Updated trace pipeline to export to: `[otlp, azuremonitor, otlphttp/langfuse]`
+- Note: Langfuse only receives traces (not metrics or logs)
+
+**4. Configuration Management**:
+- Random passwords generated for all Langfuse components via Terraform
+- Langfuse endpoint configurable via Helm values (defaults to in-cluster service)
+- Authorization header support for future Langfuse API key integration
+
+### Files Created/Modified
+
+**Created**:
+1. **infra/helm.langfuse.tf**
+   - Helm release configuration with all dependencies
+   - Random password resources for security
+   - Output variables for Langfuse URL and OTLP endpoint
+
+**Modified**:
+1. **charts/maf_demo/templates/otel-collector.yaml**
+   - Added `otlphttp/langfuse` exporter configuration
+   - Updated trace pipeline to include Langfuse
+
+2. **charts/maf_demo/values.yaml**
+   - Added `langfuse.endpoint` and `langfuse.authorization` fields
+
+3. **infra/helm.demo.tf**
+   - Pass Langfuse configuration to MAF demo Helm chart
+
+### Key Technical Decisions
+
+1. **Separate Namespace**: Langfuse deployed in its own namespace for isolation and lifecycle management
+2. **Internal Endpoint**: OTEL collector uses internal Kubernetes service DNS (no external calls)
+3. **HTTP Protocol**: Using HTTP/protobuf per Langfuse documentation (no gRPC support)
+4. **Security**: All sensitive values (passwords, connection strings) managed via Terraform random resources
+5. **Resource Sizing**: Conservative defaults with room to scale based on load
+
+### Dependencies
+
+Langfuse deployment depends on:
+- nginx-ingress (for web UI access)
+- cert-manager (for TLS certificates)
+
+### Verification Steps
+
+After deployment:
+1. Check Langfuse pods: `kubectl get pods -n langfuse`
+2. Access UI: `https://langfuse.{base_domain}`
+3. Register first user and create organization
+4. Verify traces appear from agent runs
+5. Check OTEL collector logs for export success
+
+### Future Enhancements
+
+1. **API Key Integration**: Configure Langfuse API keys for Basic auth in authorization header
+2. **External Databases**: For production, consider managed PostgreSQL and ClickHouse
+3. **Trace Filtering**: Use OTEL filter processor to selectively send traces to Langfuse
+4. **Prompt Management**: Integrate Langfuse prompt versioning with agent code
+5. **Cost Tracking**: Configure model pricing in Langfuse for cost attribution
+
+### References
+
+- [Langfuse Kubernetes Helm Deployment](https://langfuse.com/self-hosting/deployment/kubernetes-helm)
+- [Langfuse OpenTelemetry Integration](https://langfuse.com/integrations/native/opentelemetry)
+- [OpenTelemetry Collector Configuration](https://opentelemetry.io/docs/collector/configuration/)
+
+---
+
 ## 2025-10-25: Azure Monitor Prometheus Remote Write with Sidecar Container
 
 ### Objective

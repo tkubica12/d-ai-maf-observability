@@ -69,6 +69,10 @@ appInsights:
 prometheus:
   remoteWriteEndpoint: ""  # Azure Monitor Prometheus remote write endpoint (set via Terraform)
 
+langfuse:
+  endpoint: ""       # Langfuse OTLP endpoint (set via Terraform), defaults to http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel
+  authorization: ""  # Langfuse authorization header (Basic auth, set via Terraform if needed)
+
 clusterName: ""  # AKS cluster name (set via Terraform, used by Prometheus remote write sidecar)
 
 aspireDashboard:

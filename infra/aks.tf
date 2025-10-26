@@ -70,6 +70,12 @@ resource "azapi_resource" "aks" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [
+      body.properties.agentPoolProfiles[0].count
+    ]
+  }
+
   depends_on = [
     azapi_update_resource.aks_subnet_nat,
     azapi_resource.aks_network_contributor_role,

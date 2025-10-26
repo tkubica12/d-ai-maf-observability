@@ -5,6 +5,11 @@ resource "azapi_resource" "user_assigned_identity" {
   parent_id = azapi_resource.rg.id
 }
 
+# Extract OIDC issuer URL as a local value to avoid unnecessary updates
+locals {
+  aks_oidc_issuer_url = azapi_resource.aks.output.properties.oidcIssuerProfile.issuerURL
+}
+
 # Federated credential for agent workload identity in AKS
 resource "azapi_resource" "agent_federated_credential" {
   type      = "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31"
@@ -14,9 +19,13 @@ resource "azapi_resource" "agent_federated_credential" {
   body = {
     properties = {
       audiences = ["api://AzureADTokenExchange"]
-      issuer    = azapi_resource.aks.output.properties.oidcIssuerProfile.issuerURL
+      issuer    = local.aks_oidc_issuer_url
       subject   = "system:serviceaccount:maf-demo:maf-demo-agent"
     }
+  }
+
+  lifecycle {
+    ignore_changes = [body]
   }
 
   depends_on = [azapi_resource.aks]
@@ -32,9 +41,13 @@ resource "azapi_resource" "otel_collector_federated_credential" {
   body = {
     properties = {
       audiences = ["api://AzureADTokenExchange"]
-      issuer    = azapi_resource.aks.output.properties.oidcIssuerProfile.issuerURL
+      issuer    = local.aks_oidc_issuer_url
       subject   = "system:serviceaccount:maf-demo:maf-demo-otel-collector"
     }
+  }
+
+  lifecycle {
+    ignore_changes = [body]
   }
 
   depends_on = [azapi_resource.aks]
@@ -121,6 +134,12 @@ resource "azapi_resource" "current_user_cognitive_services_user_role" {
       principalType    = "User"
     }
   }
+
+  lifecycle {
+    replace_triggered_by = [
+      random_uuid.current_user_cognitive_services_user_role_id
+    ]
+  }
 }
 
 resource "azapi_resource" "current_user_cognitive_services_openai_user_role" {
@@ -135,6 +154,12 @@ resource "azapi_resource" "current_user_cognitive_services_openai_user_role" {
       principalId      = var.current_user_object_id
       principalType    = "User"
     }
+  }
+
+  lifecycle {
+    replace_triggered_by = [
+      random_uuid.current_user_cognitive_services_openai_user_role_id
+    ]
   }
 }
 
@@ -152,6 +177,12 @@ resource "azapi_resource" "current_user_cognitive_services_contributor_role" {
       principalType    = "User"
     }
   }
+
+  lifecycle {
+    replace_triggered_by = [
+      random_uuid.current_user_cognitive_services_contributor_role_id
+    ]
+  }
 }
 
 # Role assignment for current user - Grafana Admin
@@ -167,6 +198,12 @@ resource "azapi_resource" "current_user_grafana_admin_role" {
       principalId      = var.current_user_object_id
       principalType    = "User"
     }
+  }
+
+  lifecycle {
+    replace_triggered_by = [
+      random_uuid.current_user_grafana_admin_role_id
+    ]
   }
 }
 
