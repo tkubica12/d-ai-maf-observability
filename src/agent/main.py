@@ -169,6 +169,13 @@ if otlp_endpoint:
         unit="1",
     )
     
+    # Create custom token usage metric with dimensions
+    token_usage_counter = meter.create_counter(
+        name="custom_token_usage",
+        description="Token usage with user and scenario dimensions",
+        unit="tokens",
+    )
+    
     # Configure OTLP logging
     from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
     from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
@@ -227,6 +234,7 @@ else:
     tracer = None
     meter = None
     agent_call_counter = None
+    token_usage_counter = None
 
 
 async def test_connections(api_server_url: str, mcp_server_url: str) -> bool:
@@ -301,6 +309,7 @@ async def main(scenarios: list[str] | None = None) -> None:
                     tracer=tracer,
                     meter=meter,
                     agent_call_counter=agent_call_counter,
+                    token_usage_counter=token_usage_counter,
                     get_mock_user_context=get_mock_user_context,
                 )
                 await local_maf_agent.run()
@@ -327,6 +336,7 @@ async def main(scenarios: list[str] | None = None) -> None:
                     tracer=tracer,
                     meter=meter,
                     agent_call_counter=agent_call_counter,
+                    token_usage_counter=token_usage_counter,
                     get_mock_user_context=get_mock_user_context,
                 )
                 await maf_with_fas_agent.run()
@@ -351,6 +361,7 @@ async def main(scenarios: list[str] | None = None) -> None:
                     tracer=tracer,
                     meter=meter,
                     agent_call_counter=agent_call_counter,
+                    token_usage_counter=token_usage_counter,
                     get_mock_user_context=get_mock_user_context,
                 )
                 await local_maf_multiagent.run()

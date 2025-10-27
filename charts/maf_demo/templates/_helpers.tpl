@@ -83,6 +83,14 @@ app.kubernetes.io/component: aspire-dashboard
 {{- end }}
 
 {{/*
+Anonymized Aspire Dashboard labels
+*/}}
+{{- define "maf-demo.aspireDashboardAnonSelectorLabels" -}}
+{{ include "maf-demo.selectorLabels" . }}
+app.kubernetes.io/component: aspire-dashboard-anon
+{{- end }}
+
+{{/*
 Agent labels
 */}}
 {{- define "maf-demo.agentSelectorLabels" -}}

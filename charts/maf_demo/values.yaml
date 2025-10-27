@@ -85,6 +85,17 @@ aspireDashboard:
       memory: "1024Mi"
       cpu: "700m"
 
+aspireDashboardAnon:
+  enabled: true  # Enable/disable anonymized Aspire Dashboard
+  tag: "9.0"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "1024Mi"
+      cpu: "700m"
+
 ingress:
   enabled: true
   className: "nginx"
@@ -106,12 +117,19 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    aspireAnon:
+      host: ""  # Will be set via Terraform (aspire-anon.{base_domain})
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
     - secretName: api-tool-tls
       hosts: []  # Will be set via Terraform
     - secretName: mcp-tool-tls
       hosts: []  # Will be set via Terraform
     - secretName: aspire-dashboard-tls
+      hosts: []  # Will be set via Terraform
+    - secretName: aspire-dashboard-anon-tls
       hosts: []  # Will be set via Terraform
 
 service:

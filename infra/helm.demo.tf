@@ -61,6 +61,9 @@ resource "helm_release" "maf_demo" {
           aspire = {
             host = "aspire.${var.base_domain}"
           }
+          aspireAnon = {
+            host = "aspire-anon.${var.base_domain}"
+          }
         }
         tls = [
           {
@@ -74,6 +77,10 @@ resource "helm_release" "maf_demo" {
           {
             secretName = "aspire-dashboard-tls"
             hosts      = ["aspire.${var.base_domain}"]
+          },
+          {
+            secretName = "aspire-dashboard-anon-tls"
+            hosts      = ["aspire-anon.${var.base_domain}"]
           }
         ]
       }

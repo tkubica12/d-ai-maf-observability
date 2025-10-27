@@ -22,6 +22,95 @@ data:
       memory_limiter:
         check_interval: 1s
         limit_mib: 512
+      
+      # Transform processor for anonymization - strips PII and sensitive data
+      transform/anonymize:
+        error_mode: ignore
+        trace_statements:
+          - context: span
+            statements:
+              # Pseudonymize user.id using SHA256 for consistent hashing
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Remove VIP status - boolean flag considered PII
+              - delete_key(attributes, "user.is_vip")
+              - delete_key(attributes, "user.roles")
+              # Pseudonymize department for correlation while protecting identity
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
+              # Pseudonymize session and thread IDs
+              - set(attributes["session.id"], SHA256(attributes["session.id"])) where attributes["session.id"] != nil
+              - set(attributes["thread.id"], SHA256(attributes["thread.id"])) where attributes["thread.id"] != nil
+              # Strip tool arguments and results - may contain sensitive data
+              - delete_key(attributes, "tool.arguments")
+              - delete_key(attributes, "tool.result")
+              # Strip GenAI input/output messages - contains user queries and LLM responses
+              - delete_key(attributes, "gen_ai.input.messages")
+              - delete_key(attributes, "gen_ai.output.messages")
+              - delete_key(attributes, "gen_ai.prompt")
+              - delete_key(attributes, "gen_ai.completion")
+              - delete_key(attributes, "gen_ai.request.model")
+              - delete_key(attributes, "gen_ai.response.model")
+              # Strip any other GenAI content using pattern matching
+              - delete_matching_keys(attributes, "gen_ai\\..*\\.content")
+              - delete_matching_keys(attributes, "gen_ai\\..*messages.*")
+              # Redact common PII patterns in remaining string attributes
+              - replace_all_patterns(attributes, "value", "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b", "EMAIL_REDACTED")
+              - replace_all_patterns(attributes, "value", "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b", "PHONE_REDACTED")
+              - replace_all_patterns(attributes, "value", "\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b", "CARD_REDACTED")
+          - context: resource
+            statements:
+              # Pseudonymize user.id in resource attributes
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Remove VIP status from resource
+              - delete_key(attributes, "user.is_vip")
+              - delete_key(attributes, "user.roles")
+              # Pseudonymize department in resource
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
+              # Pseudonymize session in resource
+              - set(attributes["session.id"], SHA256(attributes["session.id"])) where attributes["session.id"] != nil
+        
+        log_statements:
+          - context: log
+            statements:
+              # Pseudonymize user identifiers in logs
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Remove sensitive log attributes
+              - delete_key(attributes, "user_message")
+              - delete_key(attributes, "response")
+              - delete_key(attributes, "tool_name")
+              - delete_key(attributes, "arguments")
+              - delete_key(attributes, "result")
+              - delete_key(attributes, "user.is_vip")
+              - delete_key(attributes, "user.roles")
+              # Pseudonymize department and session
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
+              - set(attributes["session.id"], SHA256(attributes["session.id"])) where attributes["session.id"] != nil
+              # Redact PII patterns in log body if it's a string
+              - replace_all_patterns(attributes, "value", "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b", "EMAIL_REDACTED") where IsString(body)
+              - replace_all_patterns(attributes, "value", "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b", "PHONE_REDACTED") where IsString(body)
+          - context: resource
+            statements:
+              # Pseudonymize user.id in resource attributes for logs
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Pseudonymize department in resource for logs
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
+        
+        metric_statements:
+          - context: datapoint
+            statements:
+              # Pseudonymize user identifiers in metrics
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Remove VIP status from metrics
+              - delete_key(attributes, "user.is_vip")
+              # Pseudonymize department in metrics
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
+          - context: resource
+            statements:
+              # Pseudonymize user.id in resource attributes for metrics
+              - set(attributes["user.id"], SHA256(attributes["user.id"])) where attributes["user.id"] != nil
+              # Remove VIP status from resource for metrics
+              - delete_key(attributes, "user.is_vip")
+              # Pseudonymize department in resource for metrics
+              - set(attributes["organization.department"], SHA256(attributes["organization.department"])) where attributes["organization.department"] != nil
 
     exporters:
       # Console exporter for troubleshooting
@@ -33,6 +122,12 @@ data:
       # OTLP exporter for Aspire Dashboard
       otlp:
         endpoint: {{ include "maf-demo.fullname" . }}-aspire-dashboard:18889
+        tls:
+          insecure: true
+      
+      # OTLP exporter for Anonymized Aspire Dashboard
+      otlp/anonymized:
+        endpoint: {{ include "maf-demo.fullname" . }}-aspire-dashboard-anon:18889
         tls:
           insecure: true
       
@@ -64,14 +159,34 @@ data:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [otlp, azuremonitor, otlphttp/langfuse]
+        
+        # Anonymized trace pipeline - strips PII before sending to anonymized dashboard
+        traces/anonymized:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/anonymize, batch]
+          exporters: [otlp/anonymized]
+        
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [otlp, prometheusremotewrite]
+        
+        # Anonymized metrics pipeline
+        metrics/anonymized:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/anonymize, batch]
+          exporters: [otlp/anonymized]
+        
         logs:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [otlp, azuremonitor]
+        
+        # Anonymized logs pipeline
+        logs/anonymized:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/anonymize, batch]
+          exporters: [otlp/anonymized]
 ---
 apiVersion: v1
 kind: ServiceAccount

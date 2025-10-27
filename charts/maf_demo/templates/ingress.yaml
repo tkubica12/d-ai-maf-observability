@@ -91,4 +91,39 @@ spec:
                 port:
                   number: 18888
           {{- end }}
+---
+{{- if .Values.aspireDashboardAnon.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard-anon
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard-anon
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    # Additional annotation to indicate this is the anonymized dashboard
+    observability.maf-demo/anonymized: "true"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.aspireAnon.host }}
+      secretName: {{ (index .Values.ingress.tls 3).secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.hosts.aspireAnon.host }}
+      http:
+        paths:
+          {{- range .Values.ingress.hosts.aspireAnon.paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "maf-demo.fullname" $ }}-aspire-dashboard-anon
+                port:
+                  number: 18888
+          {{- end }}
+{{- end }}
 {{- end }}

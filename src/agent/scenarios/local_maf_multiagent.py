@@ -41,6 +41,7 @@ class LocalMAFMultiAgent:
         tracer=None,
         meter=None,
         agent_call_counter=None,
+        token_usage_counter=None,
         get_mock_user_context=None,
     ) -> None:
         self.ai_endpoint = ai_endpoint
@@ -50,6 +51,7 @@ class LocalMAFMultiAgent:
         self.tracer = tracer
         self.meter = meter
         self.agent_call_counter = agent_call_counter
+        self.token_usage_counter = token_usage_counter
         self.get_mock_user_context = get_mock_user_context
 
     def _create_api_tool(self):
@@ -214,6 +216,10 @@ Always use both tools to provide complete information. Be concise but thorough."
                                 "response_length": len(response_text)
                             }
                         )
+                        
+                        # TODO: Extract token usage from agent message events if available
+                        # Multi-agent token tracking requires aggregating usage from all agents
+                        # This would need access to individual agent response usage_details
                 
                 elif isinstance(event, MagenticFinalResultEvent):
                     # Final synthesized result

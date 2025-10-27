@@ -1,0 +1,70 @@
+{{- if .Values.aspireDashboardAnon.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard-anon
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard-anon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "maf-demo.aspireDashboardAnonSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "maf-demo.aspireDashboardAnonSelectorLabels" . | nindent 8 }}
+      annotations:
+        # Annotation to indicate this is the anonymized/PII-stripped dashboard
+        observability.maf-demo/anonymized: "true"
+    spec:
+      containers:
+      - name: aspire-dashboard-anon
+        image: mcr.microsoft.com/dotnet/aspire-dashboard:{{ .Values.aspireDashboardAnon.tag }}
+        ports:
+        - containerPort: 18888  # Dashboard UI
+          name: http
+          protocol: TCP
+        - containerPort: 18889  # OTLP gRPC
+          name: otlp-grpc
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:18888"
+        - name: DOTNET_DASHBOARD_OTLP_ENDPOINT_URL
+          value: "http://+:18889"
+        - name: DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS
+          value: "true"
+        # Environment variable to indicate this is anonymized
+        - name: DASHBOARD_VARIANT
+          value: "anonymized"
+        resources:
+          {{- toYaml .Values.aspireDashboardAnon.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "maf-demo.fullname" . }}-aspire-dashboard-anon
+  labels:
+    {{- include "maf-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: aspire-dashboard-anon
+  annotations:
+    observability.maf-demo/anonymized: "true"
+    observability.maf-demo/description: "Anonymized Aspire Dashboard - PII stripped, user IDs pseudonymized"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 18888
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 18889
+      targetPort: otlp-grpc
+      protocol: TCP
+      name: otlp-grpc
+  selector:
+    {{- include "maf-demo.aspireDashboardAnonSelectorLabels" . | nindent 4 }}
+{{- end }}

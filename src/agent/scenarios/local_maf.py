@@ -31,6 +31,7 @@ class LocalMAFAgent:
         tracer=None,
         meter=None,
         agent_call_counter=None,
+        token_usage_counter=None,
         get_mock_user_context=None,
     ) -> None:
         self.ai_endpoint = ai_endpoint
@@ -40,6 +41,7 @@ class LocalMAFAgent:
         self.tracer = tracer
         self.meter = meter
         self.agent_call_counter = agent_call_counter
+        self.token_usage_counter = token_usage_counter
         self.get_mock_user_context = get_mock_user_context
 
     def _create_api_tool(self):
@@ -217,6 +219,75 @@ Always use the available functions to get current data.""",
 
                 print(f"\n📨 Assistant: {final_text}")
                 logger.info("Agent response", extra={"response": final_text[:200], "scenario": "local-maf"})
+                
+                # Record token usage with dimensions
+                if self.token_usage_counter and hasattr(response, 'usage_details') and response.usage_details:
+                    usage = response.usage_details
+                    is_vip = "vip" in user_context.get("user.roles", [])
+                    
+                    # Record input tokens
+                    if usage.input_token_count:
+                        self.token_usage_counter.add(
+                            usage.input_token_count,
+                            attributes={
+                                "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
+                                "user.id": user_context.get("user.id", "unknown"),
+                                "user.is_vip": str(is_vip).lower(),
+                                "organization.department": user_context.get("organization.department", "unknown"),
+                                "session.id": user_context.get("session.id", "unknown"),
+                                "scenario_id": "local-maf",
+                                "scenario_type": "single-agent",
+                                "model": self.model_name,
+                                "token_type": "input",
+                            }
+                        )
+                    
+                    # Record output tokens
+                    if usage.output_token_count:
+                        self.token_usage_counter.add(
+                            usage.output_token_count,
+                            attributes={
+                                "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
+                                "user.id": user_context.get("user.id", "unknown"),
+                                "user.is_vip": str(is_vip).lower(),
+                                "organization.department": user_context.get("organization.department", "unknown"),
+                                "session.id": user_context.get("session.id", "unknown"),
+                                "scenario_id": "local-maf",
+                                "scenario_type": "single-agent",
+                                "model": self.model_name,
+                                "token_type": "output",
+                            }
+                        )
+                    
+                    # Record total tokens
+                    if usage.total_token_count:
+                        self.token_usage_counter.add(
+                            usage.total_token_count,
+                            attributes={
+                                "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
+                                "user.id": user_context.get("user.id", "unknown"),
+                                "user.is_vip": str(is_vip).lower(),
+                                "organization.department": user_context.get("organization.department", "unknown"),
+                                "session.id": user_context.get("session.id", "unknown"),
+                                "scenario_id": "local-maf",
+                                "scenario_type": "single-agent",
+                                "model": self.model_name,
+                                "token_type": "total",
+                            }
+                        )
+                        
+                        print(f"📊 Token usage: {usage.input_token_count} input + {usage.output_token_count} output = {usage.total_token_count} total")
+                        logger.info(
+                            "Token usage recorded",
+                            extra={
+                                "metric_name": "custom_token_usage",
+                                "input_tokens": usage.input_token_count,
+                                "output_tokens": usage.output_token_count,
+                                "total_tokens": usage.total_token_count,
+                                "user.id": user_context.get("user.id"),
+                                "scenario": "local-maf"
+                            }
+                        )
             
             finally:
                 # Detach context to clean up baggage
