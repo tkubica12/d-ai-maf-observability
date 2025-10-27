@@ -39,6 +39,10 @@ from agent_framework.observability import get_tracer, get_meter, setup_observabi
 # Import scenario implementations
 from scenarios import LocalMAFAgent, MAFWithFASAgent, LocalMAFMultiAgent
 
+# OpenTelemetry Baggage for cross-span context propagation
+from opentelemetry import baggage, context
+from opentelemetry.sdk.trace import SpanProcessor, ReadableSpan
+
 load_dotenv()
 
 # Configure Python logging - NO console output, only OTLP
@@ -58,14 +62,56 @@ MOCK_USERS = [
 ]
 
 def get_mock_user_context() -> Dict[str, Any]:
-    """Generate mock user context for observability dimensions."""
+    """Generate mock user context for observability dimensions using OTel semantic conventions."""
     user = random.choice(MOCK_USERS)
+    roles = ["vip"] if user["is_vip"] else []
     return {
-        "user_id": user["user_id"],
-        "is_vip": user["is_vip"],
-        "department": user["department"],
-        "thread_id": f"thread_{uuid.uuid4().hex[:8]}",
+        "user.id": user["user_id"],  # Langfuse expected attribute for user identification
+        "user.roles": roles,  # OTel standard for user roles (VIP status)
+        "organization.department": user["department"],  # Custom namespaced attribute
+        "session.id": f"session_{uuid.uuid4().hex[:8]}",  # Langfuse expected attribute for session tracking
     }
+
+
+class BaggageSpanProcessor(SpanProcessor):
+    """
+    Custom SpanProcessor that automatically copies baggage values to span attributes.
+    
+    This ensures that user/session context set via Baggage API is available as
+    queryable attributes on all spans (including child spans from frameworks/libraries).
+    """
+    
+    # Define which baggage keys to copy to span attributes
+    BAGGAGE_KEYS = [
+        "user.id",
+        "session.id", 
+        "organization.department",
+        "user.roles",
+    ]
+    
+    def on_start(self, span: "ReadableSpan", parent_context: context.Context = None) -> None:
+        """Called when a span is started - copy baggage to span attributes."""
+        if parent_context is None:
+            parent_context = context.get_current()
+        
+        # Copy each baggage item to span attributes
+        for key in self.BAGGAGE_KEYS:
+            value = baggage.get_baggage(key, parent_context)
+            if value is not None:
+                span.set_attribute(key, value)
+    
+    def on_end(self, span: "ReadableSpan") -> None:
+        """Called when a span ends - no action needed."""
+        pass
+    
+    def shutdown(self) -> None:
+        """Called on shutdown - no cleanup needed."""
+        pass
+    
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        """Called on flush - no action needed."""
+        return True
+
 
 # Configure OpenTelemetry only if endpoint is configured
 otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
@@ -95,6 +141,15 @@ if otlp_endpoint:
         enable_sensitive_data=enable_sensitive,
         otlp_endpoint=otlp_endpoint,
     )
+    
+    # Add BaggageSpanProcessor to automatically propagate baggage to all spans
+    from opentelemetry import trace as trace_api
+    tracer_provider = trace_api.get_tracer_provider()
+    if hasattr(tracer_provider, 'add_span_processor'):
+        baggage_processor = BaggageSpanProcessor()
+        tracer_provider.add_span_processor(baggage_processor)
+        logger.info("BaggageSpanProcessor registered for automatic context propagation")
+    
     tracer = get_tracer(__name__)
     
     # Get meter from the global provider we configured

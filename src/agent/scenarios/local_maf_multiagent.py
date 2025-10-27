@@ -22,6 +22,9 @@ from agent_framework import (
 from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import DefaultAzureCredential
 
+# OpenTelemetry Baggage for cross-span context propagation
+from opentelemetry import baggage, context
+
 # Get logger from main
 logger = logging.getLogger(__name__)
 
@@ -136,18 +139,19 @@ Always use both tools to provide complete information. Be concise but thorough."
 
         # Generate mock user context
         user_context = self.get_mock_user_context() if self.get_mock_user_context else {}
-        print(f"👤 User Context: {user_context.get('user_id', 'N/A')} (VIP: {user_context.get('is_vip', False)}, Dept: {user_context.get('department', 'N/A')})")
-        print(f"🧵 Thread ID: {user_context.get('thread_id', 'N/A')}")
+        is_vip = "vip" in user_context.get("user.roles", [])
+        print(f"👤 User Context: {user_context.get('user.id', 'N/A')} (VIP: {is_vip}, Dept: {user_context.get('organization.department', 'N/A')})")
+        print(f"🧵 Session ID: {user_context.get('session.id', 'N/A')}")
         
         logger.info(
             "Starting local-maf-multiagent scenario with Magentic orchestration",
             extra={
                 "scenario_id": "local-maf-multiagent",
                 "orchestration": "magentic",
-                "user_id": user_context.get("user_id"),
-                "is_vip": user_context.get("is_vip"),
-                "department": user_context.get("department"),
-                "thread_id": user_context.get("thread_id")
+                "user.id": user_context.get("user.id"),
+                "user.roles": user_context.get("user.roles"),
+                "organization.department": user_context.get("organization.department"),
+                "session.id": user_context.get("session.id")
             }
         )
 
@@ -251,59 +255,73 @@ Always use both tools to provide complete information. Be concise but thorough."
             print("\n🤖 Magentic orchestration processing...")
             logger.info("Starting Magentic orchestration execution")
             
-            # Record custom metric with dimensions
-            if self.agent_call_counter:
-                demo_value = random.randint(1, 100)
-                self.agent_call_counter.add(
-                    demo_value,
-                    attributes={
-                        "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
-                        "user_id": user_context.get("user_id", "unknown"),
-                        "is_vip": str(user_context.get("is_vip", False)).lower(),
-                        "department": user_context.get("department", "unknown"),
-                        "thread_id": user_context.get("thread_id", "unknown"),
-                        "scenario_id": "local-maf-multiagent",
-                        "scenario_type": "multi-agent",
-                        "orchestration": "magentic",
-                    }
-                )
-                print(f"📊 Custom metric recorded: custom_agent_call_count={demo_value}")
+            # Set baggage for automatic propagation to all child spans
+            ctx = context.get_current()
+            ctx = baggage.set_baggage("user.id", user_context.get("user.id", "unknown"), ctx)
+            ctx = baggage.set_baggage("session.id", user_context.get("session.id", "unknown"), ctx)
+            ctx = baggage.set_baggage("organization.department", user_context.get("organization.department", "unknown"), ctx)
+            roles = user_context.get("user.roles", [])
+            if roles:
+                ctx = baggage.set_baggage("user.roles", ",".join(roles), ctx)
+            
+            # Attach context so baggage is active for this execution
+            token = context.attach(ctx)
+            
+            try:
+                # Record custom metric with dimensions
+                if self.agent_call_counter:
+                    demo_value = random.randint(1, 100)
+                    is_vip = "vip" in user_context.get("user.roles", [])
+                    self.agent_call_counter.add(
+                        demo_value,
+                        attributes={
+                            "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
+                            "user.id": user_context.get("user.id", "unknown"),
+                            "user.is_vip": str(is_vip).lower(),
+                            "organization.department": user_context.get("organization.department", "unknown"),
+                            "session.id": user_context.get("session.id", "unknown"),
+                            "scenario_id": "local-maf-multiagent",
+                            "scenario_type": "multi-agent",
+                            "orchestration": "magentic",
+                        }
+                    )
+                    print(f"📊 Custom metric recorded: custom_agent_call_count={demo_value}")
+                    logger.info(
+                        "Custom metric recorded",
+                        extra={
+                            "metric_name": "custom_agent_call_count",
+                            "metric_value": demo_value,
+                            "user.id": user_context.get("user.id"),
+                            "scenario": "local-maf-multiagent",
+                            "orchestration": "magentic"
+                        }
+                    )
+            
+                # Add scenario-specific attributes (baggage will auto-add user context)
+                if self.tracer:
+                    with self.tracer.start_as_current_span("scenario.local-maf-multiagent.magentic") as span:
+                        span.set_attribute("scenario_id", "local-maf-multiagent")
+                        span.set_attribute("scenario_type", "multi-agent")
+                        span.set_attribute("orchestration", "magentic")
+                        span.set_attribute("agent.pattern", "magentic-orchestration")
+                        
+                        # Run workflow - events are handled by on_event callback
+                        async for event in workflow.run_stream(user_message):
+                            pass  # Events processed in callback
+                else:
+                    # Run workflow without tracing
+                    async for event in workflow.run_stream(user_message):
+                        pass  # Events processed in callback
+
+                print("\n✅ Magentic orchestration completed")
                 logger.info(
-                    "Custom metric recorded",
+                    "Multi-agent workflow completed with Magentic orchestration",
                     extra={
-                        "metric_name": "custom_agent_call_count",
-                        "metric_value": demo_value,
-                        "user_id": user_context.get("user_id"),
                         "scenario": "local-maf-multiagent",
                         "orchestration": "magentic"
                     }
                 )
             
-            # Add custom dimensions to the span and run workflow
-            if self.tracer:
-                with self.tracer.start_as_current_span("scenario.local-maf-multiagent.magentic") as span:
-                    span.set_attribute("user_id", user_context.get("user_id", "unknown"))
-                    span.set_attribute("is_vip", user_context.get("is_vip", False))
-                    span.set_attribute("department", user_context.get("department", "unknown"))
-                    span.set_attribute("thread_id", user_context.get("thread_id", "unknown"))
-                    span.set_attribute("scenario_id", "local-maf-multiagent")
-                    span.set_attribute("scenario_type", "multi-agent")
-                    span.set_attribute("orchestration", "magentic")
-                    span.set_attribute("agent.pattern", "magentic-orchestration")
-                    
-                    # Run workflow - events are handled by on_event callback
-                    async for event in workflow.run_stream(user_message):
-                        pass  # Events processed in callback
-            else:
-                # Run workflow without tracing
-                async for event in workflow.run_stream(user_message):
-                    pass  # Events processed in callback
-
-            print("\n✅ Magentic orchestration completed")
-            logger.info(
-                "Multi-agent workflow completed with Magentic orchestration",
-                extra={
-                    "scenario": "local-maf-multiagent",
-                    "orchestration": "magentic"
-                }
-            )
+            finally:
+                # Detach context to clean up baggage
+                context.detach(token)
