@@ -71,10 +71,12 @@ After successful deployment, Terraform provides the following outputs:
 
 - AKS cluster name and OIDC issuer URL
 - ACR login server
-- Azure AI Services endpoint
+- Azure AI Services endpoint and AI Project endpoint
 - Application Insights connection strings (sensitive)
 - Grafana and Prometheus endpoints
 - Network resource IDs
+- Ingress URLs (API Tool, MCP Tool, Aspire Dashboard)
+- Langfuse URL and credentials (sensitive)
 
 ## File Organization
 
