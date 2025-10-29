@@ -43,7 +43,7 @@ resource "helm_release" "maf_demo" {
         connectionString = azapi_resource.app_insights.output.properties.ConnectionString
       }
       prometheus = {
-        remoteWriteEndpoint = azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint
+        remoteWriteEndpoint = "${azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint}/dataCollectionRules/${azapi_resource.prometheus_data_collection_rule.output.properties.immutableId}/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
       }
       langfuse = {
         endpoint      = "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel"
