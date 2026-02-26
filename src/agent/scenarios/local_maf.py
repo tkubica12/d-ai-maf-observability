@@ -8,7 +8,7 @@ import random
 from typing import Any, Dict
 
 import httpx
-from agent_framework import ai_function, MCPStreamableHTTPTool
+from agent_framework import tool, MCPStreamableHTTPTool
 from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import DefaultAzureCredential
 
@@ -49,7 +49,7 @@ class LocalMAFAgent:
         api_url = self.api_server_url
         tracer = self.tracer
 
-        @ai_function(
+        @tool(
             name="get_product_of_the_day",
             description="Get a randomly selected product of the day from the API server",
         )
@@ -111,8 +111,9 @@ class LocalMAFAgent:
         credential = DefaultAzureCredential()
         
         # Use AzureOpenAIResponsesClient for Azure OpenAI Responses API
+        # Use base_url with v1 path for Responses API model-routing
         responses_client = AzureOpenAIResponsesClient(
-            endpoint=self.ai_endpoint,
+            base_url=f"{self.ai_endpoint.rstrip('/')}/openai/v1/",
             deployment_name=self.model_name,
             api_version="preview",
             credential=credential,
@@ -138,7 +139,7 @@ class LocalMAFAgent:
             logger.info("Connected to MCP server using MCPStreamableHTTPTool")
             
             # Create agent with both tools
-            agent = responses_client.create_agent(
+            agent = responses_client.as_agent(
                 instructions="""You are a helpful assistant that can get product information and stock levels.
 
 Your task is to:
@@ -225,10 +226,18 @@ Always use the available functions to get current data.""",
                     usage = response.usage_details
                     is_vip = "vip" in user_context.get("user.roles", [])
                     
+                    # Support both dict and object access for backward compatibility
+                    def _get_usage(key, default=0):
+                        return usage.get(key, default) if isinstance(usage, dict) else getattr(usage, key, default)
+                    
+                    input_tokens = _get_usage('input_token_count', 0) or 0
+                    output_tokens = _get_usage('output_token_count', 0) or 0
+                    total_tokens = _get_usage('total_token_count', 0) or 0
+                    
                     # Record input tokens
-                    if usage.input_token_count:
+                    if input_tokens:
                         self.token_usage_counter.add(
-                            usage.input_token_count,
+                            input_tokens,
                             attributes={
                                 "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                 "user.id": user_context.get("user.id", "unknown"),
@@ -243,9 +252,9 @@ Always use the available functions to get current data.""",
                         )
                     
                     # Record output tokens
-                    if usage.output_token_count:
+                    if output_tokens:
                         self.token_usage_counter.add(
-                            usage.output_token_count,
+                            output_tokens,
                             attributes={
                                 "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                 "user.id": user_context.get("user.id", "unknown"),
@@ -260,9 +269,9 @@ Always use the available functions to get current data.""",
                         )
                     
                     # Record total tokens
-                    if usage.total_token_count:
+                    if total_tokens:
                         self.token_usage_counter.add(
-                            usage.total_token_count,
+                            total_tokens,
                             attributes={
                                 "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                 "user.id": user_context.get("user.id", "unknown"),
@@ -276,14 +285,14 @@ Always use the available functions to get current data.""",
                             }
                         )
                         
-                        print(f"📊 Token usage: {usage.input_token_count} input + {usage.output_token_count} output = {usage.total_token_count} total")
+                        print(f"📊 Token usage: {input_tokens} input + {output_tokens} output = {total_tokens} total")
                         logger.info(
                             "Token usage recorded",
                             extra={
                                 "metric_name": "custom_token_usage",
-                                "input_tokens": usage.input_token_count,
-                                "output_tokens": usage.output_token_count,
-                                "total_tokens": usage.total_token_count,
+                                "input_tokens": input_tokens,
+                                "output_tokens": output_tokens,
+                                "total_tokens": total_tokens,
                                 "user.id": user_context.get("user.id"),
                                 "scenario": "local-maf"
                             }

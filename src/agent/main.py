@@ -34,7 +34,7 @@ import httpx
 from dotenv import load_dotenv
 from fastmcp import Client
 
-from agent_framework.observability import get_tracer, get_meter, setup_observability
+from agent_framework.observability import get_tracer, get_meter, configure_otel_providers
 
 # Import scenario implementations
 from scenarios import LocalMAFAgent, MAFWithFASAgent, LocalMAFMultiAgent
@@ -137,9 +137,8 @@ if otlp_endpoint:
     otel_metrics.set_meter_provider(meter_provider)
     
     # THEN: Setup Agent Framework observability (traces + logs)
-    setup_observability(
+    configure_otel_providers(
         enable_sensitive_data=enable_sensitive,
-        otlp_endpoint=otlp_endpoint,
     )
     
     # Add BaggageSpanProcessor to automatically propagate baggage to all spans

@@ -29,8 +29,8 @@ resource "helm_release" "maf_demo" {
         }
         clientId = azapi_resource.user_assigned_identity.output.properties.clientId
         tenantId = azapi_resource.user_assigned_identity.output.properties.tenantId
-        # AI endpoint for local-maf scenario (Azure OpenAI format)
-        aiEndpoint = azapi_resource.ai_services.output.properties.endpoints["Azure OpenAI Legacy API - Latest moniker"]
+        # AI endpoint for local-maf scenario (AI Foundry API with v1 Responses API support)
+        aiEndpoint = azapi_resource.ai_services.output.properties.endpoints["AI Foundry API"]
         # Project endpoint for maf-with-fas scenario (Foundry Agent Service)
         projectEndpoint = azapi_resource.ai_project.output.properties.endpoints["AI Foundry API"]
         modelName       = var.ai_model_name

@@ -8,7 +8,7 @@ import random
 from typing import Any, Dict
 
 import httpx
-from agent_framework import ai_function, HostedMCPTool
+from agent_framework import tool, MCPStreamableHTTPTool
 from agent_framework.azure import AzureAIAgentClient
 from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
 
@@ -49,7 +49,7 @@ class MAFWithFASAgent:
         api_url = self.api_server_url
         tracer = self.tracer
 
-        @ai_function(
+        @tool(
             name="get_product_of_the_day",
             description="Get a randomly selected product of the day from the API server",
         )
@@ -113,7 +113,7 @@ class MAFWithFASAgent:
             agent_client = AzureAIAgentClient(
                 project_endpoint=self.project_endpoint,
                 model_deployment_name=self.model_deployment,
-                async_credential=credential,
+                credential=credential,
             )
 
             print("✅ Connected to Azure AI Project")
@@ -123,16 +123,16 @@ class MAFWithFASAgent:
             # Create API tool
             api_tool = self._create_api_tool()
             
-            # Create MCP tool using HostedMCPTool for Foundry Agent Service
+            # Create MCP tool using MCPStreamableHTTPTool for Foundry Agent Service
             # Note: FastMCP mounts at /mcp and creates endpoint at /mcp, so full path is /mcp/mcp
-            print(f"🔌 Configuring Hosted MCP tool at {self.mcp_server_url}/mcp")
-            mcp_tool = HostedMCPTool(
+            print(f"🔌 Configuring MCP tool at {self.mcp_server_url}/mcp")
+            mcp_tool = MCPStreamableHTTPTool(
                 name="stock_lookup_mcp",
                 url=f"{self.mcp_server_url}/mcp",
             )
             
-            print("✅ Hosted MCP tool configured for Foundry Agent Service")
-            logger.info("Hosted MCP tool configured for Foundry Agent Service")
+            print("✅ MCP tool configured for Foundry Agent Service")
+            logger.info("MCP tool configured for Foundry Agent Service")
 
             instructions = """You are a helpful assistant that provides product information and stock levels.
 
@@ -144,12 +144,13 @@ Your task is to:
 
 Always use both API and MCP tools to provide complete information."""
 
-            # Use agent as context manager to properly close sessions
-            async with agent_client.create_agent(
+            agent = agent_client.as_agent(
                 name="Product Info Agent",
                 instructions=instructions,
                 tools=[api_tool, mcp_tool],
-            ) as agent:
+            )
+
+            async with mcp_tool:
                 print("✅ Agent created (using Foundry Agent Service)")
                 logger.info("Agent created using Foundry Agent Service")
 
@@ -228,10 +229,18 @@ Always use both API and MCP tools to provide complete information."""
                         usage = response.usage_details
                         is_vip = "vip" in user_context.get("user.roles", [])
                         
+                        # Support both dict and object access for backward compatibility
+                        def _get_usage(key, default=0):
+                            return usage.get(key, default) if isinstance(usage, dict) else getattr(usage, key, default)
+                        
+                        input_tokens = _get_usage('input_token_count', 0) or 0
+                        output_tokens = _get_usage('output_token_count', 0) or 0
+                        total_tokens = _get_usage('total_token_count', 0) or 0
+                        
                         # Record input tokens
-                        if usage.input_token_count:
+                        if input_tokens:
                             self.token_usage_counter.add(
-                                usage.input_token_count,
+                                input_tokens,
                                 attributes={
                                     "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                     "user.id": user_context.get("user.id", "unknown"),
@@ -246,9 +255,9 @@ Always use both API and MCP tools to provide complete information."""
                             )
                         
                         # Record output tokens
-                        if usage.output_token_count:
+                        if output_tokens:
                             self.token_usage_counter.add(
-                                usage.output_token_count,
+                                output_tokens,
                                 attributes={
                                     "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                     "user.id": user_context.get("user.id", "unknown"),
@@ -263,9 +272,9 @@ Always use both API and MCP tools to provide complete information."""
                             )
                         
                         # Record total tokens
-                        if usage.total_token_count:
+                        if total_tokens:
                             self.token_usage_counter.add(
-                                usage.total_token_count,
+                                total_tokens,
                                 attributes={
                                     "service.name": os.getenv("OTEL_SERVICE_NAME", "agent"),
                                     "user.id": user_context.get("user.id", "unknown"),
@@ -279,14 +288,14 @@ Always use both API and MCP tools to provide complete information."""
                                 }
                             )
                             
-                            print(f"📊 Token usage: {usage.input_token_count} input + {usage.output_token_count} output = {usage.total_token_count} total")
+                            print(f"📊 Token usage: {input_tokens} input + {output_tokens} output = {total_tokens} total")
                             logger.info(
                                 "Token usage recorded",
                                 extra={
                                     "metric_name": "custom_token_usage",
-                                    "input_tokens": usage.input_token_count,
-                                    "output_tokens": usage.output_token_count,
-                                    "total_tokens": usage.total_token_count,
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                    "total_tokens": total_tokens,
                                     "user.id": user_context.get("user.id"),
                                     "scenario": "maf-with-fas"
                                 }

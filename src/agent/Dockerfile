@@ -14,5 +14,5 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 # Copy application code
 COPY . .
 
-# Run the application once, then sleep forever to allow manual re-runs
-CMD ["sh", "-c", "python main.py; echo 'Agent finished. Container staying alive for debugging. Run: python main.py'; sleep infinity"]
+# Sleep to allow manual runs via kubectl exec
+CMD ["sh", "-c", "echo 'Agent container ready. Run: python main.py'; sleep infinity"]

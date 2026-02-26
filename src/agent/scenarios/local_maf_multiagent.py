@@ -1,4 +1,4 @@
-"""Local Microsoft Agent Framework multi-agent with Magentic orchestration (local-maf-multiagent)."""
+"""Local Microsoft Agent Framework multi-agent with workflow orchestration (local-maf-multiagent)."""
 from __future__ import annotations
 
 import json
@@ -9,15 +9,10 @@ from typing import Any, Dict
 
 import httpx
 from agent_framework import (
-    ai_function,
+    tool,
     MCPStreamableHTTPTool,
-    MagenticBuilder,
-    MagenticCallbackEvent,
-    MagenticCallbackMode,
-    MagenticAgentMessageEvent,
-    MagenticOrchestratorMessageEvent,
-    MagenticFinalResultEvent,
-    ChatAgent,
+    WorkflowBuilder,
+    Agent,
 )
 from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import DefaultAzureCredential
@@ -30,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class LocalMAFMultiAgent:
-    """Local Microsoft Agent Framework multi-agent with Magentic orchestration (local-maf-multiagent)."""
+    """Local Microsoft Agent Framework multi-agent with workflow orchestration (local-maf-multiagent)."""
 
     def __init__(
         self,
@@ -59,7 +54,7 @@ class LocalMAFMultiAgent:
         api_url = self.api_server_url
         tracer = self.tracer
 
-        @ai_function(
+        @tool(
             name="get_product_of_the_day",
             description="Get a randomly selected product of the day from the API server",
         )
@@ -100,7 +95,7 @@ class LocalMAFMultiAgent:
         credential = DefaultAzureCredential()
         
         responses_client = AzureOpenAIResponsesClient(
-            endpoint=self.ai_endpoint,
+            base_url=f"{self.ai_endpoint.rstrip('/')}/openai/v1/",
             deployment_name=self.model_name,
             api_version="preview",
             credential=credential,
@@ -116,7 +111,7 @@ class LocalMAFMultiAgent:
         )
         
         # Create worker agent with tools
-        worker_agent = responses_client.create_agent(
+        worker_agent = responses_client.as_agent(
             instructions="""You are a specialized worker agent that provides product information and stock levels.
 
 Your task is to:
@@ -132,11 +127,11 @@ Always use both tools to provide complete information. Be concise but thorough."
         return worker_agent, mcp_tool
 
     async def run(self) -> None:
-        """Run local MAF multi-agent with Magentic orchestration."""
+        """Run local MAF multi-agent with workflow orchestration."""
         print("\n" + "=" * 80)
         print("🔄 Local Microsoft Agent Framework Multi-Agent")
         print("   Scenario ID: local-maf-multiagent")
-        print("   Pattern: Magentic Orchestration")
+        print("   Pattern: Workflow Orchestration")
         print("=" * 80)
 
         # Generate mock user context
@@ -146,10 +141,10 @@ Always use both tools to provide complete information. Be concise but thorough."
         print(f"🧵 Session ID: {user_context.get('session.id', 'N/A')}")
         
         logger.info(
-            "Starting local-maf-multiagent scenario with Magentic orchestration",
+            "Starting local-maf-multiagent scenario with workflow orchestration",
             extra={
                 "scenario_id": "local-maf-multiagent",
-                "orchestration": "magentic",
+                "orchestration": "workflow",
                 "user.id": user_context.get("user.id"),
                 "user.roles": user_context.get("user.roles"),
                 "organization.department": user_context.get("organization.department"),
@@ -165,101 +160,36 @@ Always use both tools to provide complete information. Be concise but thorough."
             print("✅ Worker agent created with API and MCP tools")
             logger.info("Worker agent created with tools", extra={"agent": "worker"})
 
-            # Create Azure OpenAI Responses client for the Magentic manager
+            # Create facilitator agent for workflow orchestration
             credential = DefaultAzureCredential()
-            responses_client = AzureOpenAIResponsesClient(
-                endpoint=self.ai_endpoint,
+            facilitator_client = AzureOpenAIResponsesClient(
+                base_url=f"{self.ai_endpoint.rstrip('/')}/openai/v1/",
                 deployment_name=self.model_name,
                 api_version="preview",
                 credential=credential,
             )
 
-            # Wrap the responses client in a ChatAgent for Magentic compatibility
-            # The StandardMagenticManager will use this chat client
-            manager_agent = ChatAgent(
-                chat_client=responses_client,
-                name="MagenticManager",
-                instructions="You are a Magentic orchestrator managing specialized worker agents.",
+            facilitator_agent = facilitator_client.as_agent(
+                name="FacilitatorAgent",
+                instructions="You are a facilitator that synthesizes information from worker agents into a comprehensive, user-friendly response.",
             )
 
-            print("🔧 Creating Magentic orchestration workflow...")
+            print("🔧 Creating workflow orchestration...")
             print(f"🤖 Using model: {self.model_name}")
-            logger.info("Creating Magentic workflow", extra={"model": self.model_name})
+            logger.info("Creating workflow", extra={"model": self.model_name})
 
-            # Create event callback for tracking orchestration
-            async def on_event(event: MagenticCallbackEvent) -> None:
-                if isinstance(event, MagenticOrchestratorMessageEvent):
-                    # Manager's planning and coordination messages
-                    message_text = getattr(event.message, 'text', '') if event.message else ''
-                    print(f"\n[🎯 ORCHESTRATOR:{event.kind}]\n{message_text}\n{'-' * 40}")
-                    logger.info(
-                        "Orchestrator event",
-                        extra={
-                            "event_type": "orchestrator",
-                            "kind": event.kind,
-                            "message": message_text[:200]
-                        }
-                    )
-                
-                elif isinstance(event, MagenticAgentMessageEvent):
-                    # Agent responses
-                    msg = event.message
-                    if msg is not None:
-                        response_text = (msg.text or "").replace("\n", " ")
-                        print(f"\n[🤖 AGENT:{event.agent_id}] {msg.role.value}\n{response_text[:200]}...\n{'-' * 40}")
-                        logger.info(
-                            "Agent response",
-                            extra={
-                                "event_type": "agent_message",
-                                "agent_id": event.agent_id,
-                                "role": msg.role.value,
-                                "response_length": len(response_text)
-                            }
-                        )
-                        
-                        # TODO: Extract token usage from agent message events if available
-                        # Multi-agent token tracking requires aggregating usage from all agents
-                        # This would need access to individual agent response usage_details
-                
-                elif isinstance(event, MagenticFinalResultEvent):
-                    # Final synthesized result
-                    print("\n" + "=" * 50)
-                    print("✨ FINAL RESULT:")
-                    print("=" * 50)
-                    if event.message is not None:
-                        print(event.message.text)
-                    print("=" * 50)
-                    logger.info(
-                        "Final result received",
-                        extra={
-                            "event_type": "final_result",
-                            "has_message": event.message is not None
-                        }
-                    )
+            # Build workflow chain
+            workflow = WorkflowBuilder(start_executor=worker_agent).add_chain([worker_agent, facilitator_agent]).build()
 
-            # Build Magentic workflow with StandardMagenticManager
-            workflow = (
-                MagenticBuilder()
-                .participants(worker=worker_agent)
-                .on_event(on_event, mode=MagenticCallbackMode.NON_STREAMING)
-                .with_standard_manager(
-                    chat_client=responses_client,  # Use the responses client directly
-                    max_round_count=10,
-                    max_stall_count=3,
-                    max_reset_count=2,
-                )
-                .build()
-            )
-
-            print("✅ Magentic workflow created")
-            logger.info("Magentic workflow built successfully")
+            print("✅ Workflow created")
+            logger.info("Workflow built successfully")
 
             user_message = "What's the product of the day and is it in stock?"
             print(f"\n📤 User → Workflow: {user_message}")
             logger.info("User message", extra={"user_message": user_message, "scenario": "local-maf-multiagent"})
 
-            print("\n🤖 Magentic orchestration processing...")
-            logger.info("Starting Magentic orchestration execution")
+            print("\n🤖 Workflow orchestration processing...")
+            logger.info("Starting workflow orchestration execution")
             
             # Set baggage for automatic propagation to all child spans
             ctx = context.get_current()
@@ -288,7 +218,7 @@ Always use both tools to provide complete information. Be concise but thorough."
                             "session.id": user_context.get("session.id", "unknown"),
                             "scenario_id": "local-maf-multiagent",
                             "scenario_type": "multi-agent",
-                            "orchestration": "magentic",
+                            "orchestration": "workflow",
                         }
                     )
                     print(f"📊 Custom metric recorded: custom_agent_call_count={demo_value}")
@@ -299,32 +229,42 @@ Always use both tools to provide complete information. Be concise but thorough."
                             "metric_value": demo_value,
                             "user.id": user_context.get("user.id"),
                             "scenario": "local-maf-multiagent",
-                            "orchestration": "magentic"
+                            "orchestration": "workflow"
                         }
                     )
             
                 # Add scenario-specific attributes (baggage will auto-add user context)
                 if self.tracer:
-                    with self.tracer.start_as_current_span("scenario.local-maf-multiagent.magentic") as span:
+                    with self.tracer.start_as_current_span("scenario.local-maf-multiagent.workflow") as span:
                         span.set_attribute("scenario_id", "local-maf-multiagent")
                         span.set_attribute("scenario_type", "multi-agent")
-                        span.set_attribute("orchestration", "magentic")
-                        span.set_attribute("agent.pattern", "magentic-orchestration")
+                        span.set_attribute("orchestration", "workflow")
+                        span.set_attribute("agent.pattern", "workflow-orchestration")
                         
-                        # Run workflow - events are handled by on_event callback
-                        async for event in workflow.run_stream(user_message):
-                            pass  # Events processed in callback
+                        result = await workflow.run(user_message)
                 else:
-                    # Run workflow without tracing
-                    async for event in workflow.run_stream(user_message):
-                        pass  # Events processed in callback
+                    result = await workflow.run(user_message)
 
-                print("\n✅ Magentic orchestration completed")
+                # Extract and display result
+                if hasattr(result, "text"):
+                    final_text = result.text
+                elif hasattr(result, "content"):
+                    final_text = result.content
+                else:
+                    final_text = str(result)
+
+                print("\n" + "=" * 50)
+                print("✨ FINAL RESULT:")
+                print("=" * 50)
+                print(final_text)
+                print("=" * 50)
+
+                print("\n✅ Workflow orchestration completed")
                 logger.info(
-                    "Multi-agent workflow completed with Magentic orchestration",
+                    "Multi-agent workflow completed with workflow orchestration",
                     extra={
                         "scenario": "local-maf-multiagent",
-                        "orchestration": "magentic"
+                        "orchestration": "workflow"
                     }
                 )
             

@@ -39,11 +39,11 @@ agent:
   tenantId: ""  # Azure tenant ID
   resources:
     requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
       memory: "512Mi"
-      cpu: "500m"
+      cpu: "200m"
+    limits:
+      memory: "2048Mi"
+      cpu: "1000m"
   # Azure AI configuration (set via Terraform)
   aiEndpoint: ""       # AI Foundry API endpoint with /models path
   projectEndpoint: ""  # Project endpoint for Foundry Agent Service
