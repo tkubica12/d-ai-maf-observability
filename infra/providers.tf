@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.4"
     }
+    grafana = {
+      source  = "grafana/grafana"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -34,3 +38,8 @@ provider "helm" {
 }
 
 provider "local" {}
+
+provider "grafana" {
+  url  = azapi_resource.grafana.output.properties.endpoint
+  auth = var.grafana_auth_token
+}

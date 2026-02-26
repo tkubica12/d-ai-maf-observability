@@ -1,0 +1,987 @@
+{
+  "title": "AI Agent Metrics - Prometheus",
+  "description": "Custom agent metrics from Azure Monitor Prometheus. Includes agent call counts, token usage, and breakdowns by user, department, scenario, and VIP status.",
+  "tags": [
+    "ai-agent",
+    "prometheus",
+    "observability",
+    "maf"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "refresh": 1,
+        "regex": ""
+      },
+      {
+        "name": "user_id",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(custom_agent_call_count_total, user_id)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "options": [],
+        "refresh": 2,
+        "sort": 1,
+        "allValue": ".*"
+      },
+      {
+        "name": "department",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(custom_agent_call_count_total, organization_department)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "options": [],
+        "refresh": 2,
+        "sort": 1,
+        "allValue": ".*"
+      },
+      {
+        "name": "scenario_id",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(custom_agent_call_count_total, scenario_id)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "options": [],
+        "refresh": 2,
+        "sort": 1,
+        "allValue": ".*"
+      },
+      {
+        "name": "is_vip",
+        "type": "custom",
+        "query": "All : .*,true,false",
+        "current": {
+          "text": "All",
+          "value": ".*"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      },
+      {
+        "name": "token_type",
+        "type": "custom",
+        "query": "All : .*,input,output,total",
+        "current": {
+          "text": "All",
+          "value": ".*"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Total Agent Calls",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"})",
+          "legendFormat": "Total Calls"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Token Usage",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=\"total\"})",
+          "legendFormat": "Total Tokens"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unique Users",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "count(count by (user_id) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\"}))",
+          "legendFormat": "Users"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Active Scenarios",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "count(count by (scenario_id) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\"}))",
+          "legendFormat": "Scenarios"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent Call Rate Over Time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"}[5m])) by (scenario_id)",
+          "legendFormat": "{{scenario_id}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum",
+            "mean"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Token Usage Rate Over Time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=~\"$token_type\"}[5m])) by (token_type)",
+          "legendFormat": "{{token_type}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum",
+            "mean"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Per User Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Agent Calls by User",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_id) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"})",
+          "legendFormat": "{{user_id}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Token Usage by User",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_id) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=\"total\"})",
+          "legendFormat": "{{user_id}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Token Usage by User (Input vs Output)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_id) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"input\"})",
+          "legendFormat": "{{user_id}} (input)"
+        },
+        {
+          "expr": "sum by (user_id) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"output\"})",
+          "legendFormat": "{{user_id}} (output)"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Department Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "collapsed": false
+    },
+    {
+      "type": "piechart",
+      "title": "Agent Calls by Department",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sum by (organization_department) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"})",
+          "legendFormat": "{{organization_department}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Token Usage by Department",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sum by (organization_department) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=\"total\"})",
+          "legendFormat": "{{organization_department}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Token Usage by Department Over Time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[5m])) by (organization_department)",
+          "legendFormat": "{{organization_department}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Scenario Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Agent Calls by Scenario",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "sum by (scenario_id, scenario_type) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"})",
+          "legendFormat": "{{scenario_id}} ({{scenario_type}})"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Token Usage by Scenario & Type",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "sum by (scenario_id, token_type) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=~\"$token_type\"})",
+          "legendFormat": "{{scenario_id}} - {{token_type}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "VIP Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "collapsed": false
+    },
+    {
+      "type": "piechart",
+      "title": "Agent Calls: VIP vs Non-VIP",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 49
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_is_vip) (custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\"})",
+          "legendFormat": "VIP: {{user_is_vip}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Token Usage: VIP vs Non-VIP",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 49
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_is_vip) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"})",
+          "legendFormat": "VIP: {{user_is_vip}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Token Usage: VIP vs Non-VIP Over Time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 49
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[5m])) by (user_is_vip)",
+          "legendFormat": "VIP: {{user_is_vip}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Model & Token Details",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Token Usage by Model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=\"total\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Input vs Output Tokens by Model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"input\"})",
+          "legendFormat": "{{model}} (input)"
+        },
+        {
+          "expr": "sum by (model) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"output\"})",
+          "legendFormat": "{{model}} (output)"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Detailed Token Usage by User, Scenario & Model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "targets": [
+        {
+          "expr": "sum by (user_id, scenario_id, model, token_type) (custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=~\"$token_type\"})",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "user_id": "User",
+              "scenario_id": "Scenario",
+              "model": "Model",
+              "token_type": "Token Type",
+              "Value": "Count"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "uid": "ai-agent-prometheus-metrics"
+}

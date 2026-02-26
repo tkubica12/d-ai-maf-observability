@@ -206,3 +206,20 @@ variable "agent_image_tag" {
   EOT
   default     = "latest"
 }
+
+variable "grafana_auth_token" {
+  type        = string
+  sensitive   = true
+  description = <<-EOT
+    Azure AD access token for Grafana API authentication.
+    Used by the grafana/grafana Terraform provider to manage dashboards
+    in Azure Managed Grafana.
+
+    Obtain with:
+      az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv
+
+    If not provided, Grafana dashboard provisioning is skipped.
+    Example: "eyJ0eXAiOiJKV1Qi..."
+  EOT
+  default     = ""
+}

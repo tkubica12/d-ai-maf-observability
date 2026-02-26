@@ -134,3 +134,9 @@ output "aspire_dashboard_url" {
   description = "URL for the Aspire Dashboard (OpenTelemetry UI)"
   value       = "https://aspire.${var.base_domain}"
 }
+
+output "grafana_dashboard_folder" {
+  description = "Grafana folder name for AI Agent Observability dashboards"
+  sensitive   = true
+  value       = var.grafana_auth_token != "" ? grafana_folder.ai_agent_observability[0].title : "Not provisioned (grafana_auth_token not set)"
+}

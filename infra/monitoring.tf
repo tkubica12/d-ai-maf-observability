@@ -82,6 +82,22 @@ resource "azapi_resource" "grafana_prometheus_reader_role" {
   }
 }
 
+resource "random_uuid" "grafana_log_analytics_reader_role_id" {}
+
+resource "azapi_resource" "grafana_log_analytics_reader_role" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = random_uuid.grafana_log_analytics_reader_role_id.result
+  parent_id = azapi_resource.log_analytics.id
+
+  body = {
+    properties = {
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+      principalId      = azapi_resource.grafana.identity[0].principal_id
+      principalType    = "ServicePrincipal"
+    }
+  }
+}
+
 resource "azapi_resource" "prometheus_data_collection_endpoint" {
   type      = "Microsoft.Insights/dataCollectionEndpoints@2023-03-11"
   name      = "${var.project_name}-${var.environment}-dce"

@@ -1,0 +1,788 @@
+{
+  "title": "AI Agent Traces - Application Insights",
+  "description": "Agent execution traces from Application Insights. Includes operation durations, span analysis, and breakdowns by user, department, scenario, and service.",
+  "tags": [
+    "ai-agent",
+    "application-insights",
+    "traces",
+    "observability",
+    "maf"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "grafana-azure-monitor-datasource",
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "refresh": 1,
+        "regex": ""
+      },
+      {
+        "name": "user_id",
+        "type": "custom",
+        "query": "All,user_001,user_002,user_003,user_004,user_005",
+        "current": {
+          "text": "All",
+          "value": "All"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      },
+      {
+        "name": "department",
+        "type": "custom",
+        "query": "All,Engineering,Marketing",
+        "current": {
+          "text": "All",
+          "value": "All"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      },
+      {
+        "name": "scenario_id",
+        "type": "custom",
+        "query": "All,local-maf,maf-with-fas,local-maf-multiagent",
+        "current": {
+          "text": "All",
+          "value": "All"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Total Operations",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureTraces": {
+            "resultFormat": "table",
+            "resources": [],
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| count",
+            "traceTypes": [
+              "dependency"
+            ]
+          },
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| count"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Average Duration (ms)",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs)"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize total=count(), errors=countif(Success == false)\n| extend error_rate = round(100.0 * errors / total, 2)\n| project error_rate"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unique Services",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "AppDependencies\n| union AppRequests\n| distinct AppRoleName\n| count"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Operations Over Time by Service",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by bin(TimeGenerated, 5m), AppRoleName\n| render timechart"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Average Duration Over Time by Service",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), AppRoleName\n| render timechart"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Per User Trace Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Operations by User",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id'])\n| order by count_ desc"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Average Duration by User (ms)",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by tostring(Properties['user.id'])\n| order by avg_DurationMs desc"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Scenario & Span Analysis",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Operations by Scenario",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nAppDependencies\n| where isnotempty(Properties['scenario_id'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| summarize count(), avg(DurationMs) by tostring(Properties['scenario_id'])\n| order by count_ desc"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Span Types Distribution",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by Type\n| order by count_ desc"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Tool Call Performance",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Tool Call Durations",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg_duration=avg(DurationMs), p95_duration=percentile(DurationMs, 95), call_count=count() by tostring(Properties['tool.name'])\n| order by call_count desc"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Tool Calls by User",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id']), tostring(Properties['tool.name'])\n| order by count_ desc"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Department & Service Breakdown",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "collapsed": false
+    },
+    {
+      "type": "piechart",
+      "title": "Operations by Department",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 41
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['organization.department'])"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Operations by Service",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 41
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| union AppRequests\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by AppRoleName"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Duration by Department Over Time",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 41
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), tostring(Properties['organization.department'])\n| render timechart"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Recent Operations",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "Recent Agent Operations",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "targets": [
+        {
+          "queryType": "Azure Traces",
+          "azureLogAnalytics": {
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| project TimeGenerated, AppRoleName, Name, DurationMs, Success, \n    user_id=tostring(Properties['user.id']),\n    department=tostring(Properties['organization.department']),\n    scenario=tostring(Properties['scenario_id']),\n    tool=tostring(Properties['tool.name'])\n| order by TimeGenerated desc\n| take 50"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "TimeGenerated",
+            "desc": true
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "uid": "ai-agent-appinsights-traces"
+}
