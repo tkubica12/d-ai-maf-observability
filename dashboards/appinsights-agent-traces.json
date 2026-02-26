@@ -97,17 +97,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
-          "azureTraces": {
-            "resultFormat": "table",
-            "resources": [],
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| count",
-            "traceTypes": [
-              "dependency"
-            ]
-          },
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| count"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| count",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -151,9 +146,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs)"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs)",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -206,9 +204,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize total=count(), errors=countif(Success == false)\n| extend error_rate = round(100.0 * errors / total, 2)\n| project error_rate"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize total=count(), errors=countif(Success == false)\n| extend error_rate = round(100.0 * errors / total, 2)\n| project error_rate",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -261,9 +262,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "AppDependencies\n| union AppRequests\n| distinct AppRoleName\n| count"
+            "query": "AppDependencies\n| union AppRequests\n| distinct AppRoleName\n| count",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -307,9 +311,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by bin(TimeGenerated, 5m), AppRoleName\n| render timechart"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by bin(TimeGenerated, 5m), AppRoleName\n| render timechart",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -348,9 +355,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), AppRoleName\n| render timechart"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), AppRoleName\n| render timechart",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -402,9 +412,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id'])\n| order by count_ desc"
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id'])\n| order by count_ desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -432,9 +445,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by tostring(Properties['user.id'])\n| order by avg_DurationMs desc"
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by tostring(Properties['user.id'])\n| order by avg_DurationMs desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -478,9 +494,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nAppDependencies\n| where isnotempty(Properties['scenario_id'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| summarize count(), avg(DurationMs) by tostring(Properties['scenario_id'])\n| order by count_ desc"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nAppDependencies\n| where isnotempty(Properties['scenario_id'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| summarize count(), avg(DurationMs) by tostring(Properties['scenario_id'])\n| order by count_ desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -508,9 +527,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by Type\n| order by count_ desc"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by Type\n| order by count_ desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -557,9 +579,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg_duration=avg(DurationMs), p95_duration=percentile(DurationMs, 95), call_count=count() by tostring(Properties['tool.name'])\n| order by call_count desc"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg_duration=avg(DurationMs), p95_duration=percentile(DurationMs, 95), call_count=count() by tostring(Properties['tool.name'])\n| order by call_count desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -592,9 +617,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id']), tostring(Properties['tool.name'])\n| order by count_ desc"
+            "query": "let deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['tool.name'])\n| where isnotempty(Properties['user.id'])\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['user.id']), tostring(Properties['tool.name'])\n| order by count_ desc",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -637,9 +665,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['organization.department'])"
+            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by tostring(Properties['organization.department'])",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -675,9 +706,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| union AppRequests\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by AppRoleName"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| union AppRequests\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize count() by AppRoleName",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -713,9 +747,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), tostring(Properties['organization.department'])\n| render timechart"
+            "query": "let userFilter = '${user_id}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where isnotempty(Properties['organization.department'])\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| summarize avg(DurationMs) by bin(TimeGenerated, 5m), tostring(Properties['organization.department'])\n| render timechart",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],
@@ -766,9 +803,12 @@
       },
       "targets": [
         {
-          "queryType": "Azure Traces",
+          "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| project TimeGenerated, AppRoleName, Name, DurationMs, Success, \n    user_id=tostring(Properties['user.id']),\n    department=tostring(Properties['organization.department']),\n    scenario=tostring(Properties['scenario_id']),\n    tool=tostring(Properties['tool.name'])\n| order by TimeGenerated desc\n| take 50"
+            "query": "let userFilter = '${user_id}';\nlet deptFilter = '${department}';\nlet scenarioFilter = '${scenario_id}';\nAppDependencies\n| where (userFilter == 'All' or tostring(Properties['user.id']) == userFilter)\n| where (deptFilter == 'All' or tostring(Properties['organization.department']) == deptFilter)\n| where (scenarioFilter == 'All' or tostring(Properties['scenario_id']) == scenarioFilter)\n| project TimeGenerated, AppRoleName, Name, DurationMs, Success, \n    user_id=tostring(Properties['user.id']),\n    department=tostring(Properties['organization.department']),\n    scenario=tostring(Properties['scenario_id']),\n    tool=tostring(Properties['tool.name'])\n| order by TimeGenerated desc\n| take 50",
+            "resources": [
+              "/subscriptions/673af34d-6b28-41dc-bc7b-f507418045e6/resourceGroups/rg-maf-observability/providers/Microsoft.OperationalInsights/workspaces/mafobs-dev-law"
+            ]
           }
         }
       ],

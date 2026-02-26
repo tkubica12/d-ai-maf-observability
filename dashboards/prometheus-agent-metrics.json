@@ -319,7 +319,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"}[5m])) by (scenario_id)",
+          "expr": "sum(increase(custom_agent_call_count_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\"}[15m])) by (scenario_id)",
           "legendFormat": "{{scenario_id}}"
         }
       ],
@@ -337,10 +337,11 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 30,
             "lineWidth": 2,
-            "pointSize": 5,
-            "spanNulls": true
+            "pointSize": 1,
+            "spanNulls": true,
+            "lineInterpolation": "smooth"
           }
         }
       }
@@ -360,7 +361,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=~\"$token_type\"}[5m])) by (token_type)",
+          "expr": "sum(increase(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", user_is_vip=~\"$is_vip\", token_type=~\"$token_type\"}[15m])) by (token_type)",
           "legendFormat": "{{token_type}}"
         }
       ],
@@ -379,10 +380,11 @@
           "unit": "short",
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 30,
             "lineWidth": 2,
-            "pointSize": 5,
-            "spanNulls": true
+            "pointSize": 1,
+            "spanNulls": true,
+            "lineInterpolation": "smooth"
           }
         }
       }
@@ -611,7 +613,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[5m])) by (organization_department)",
+          "expr": "sum(increase(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[15m])) by (organization_department)",
           "legendFormat": "{{organization_department}}"
         }
       ],
@@ -629,9 +631,11 @@
           "unit": "short",
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 30,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": true,
+            "pointSize": 1,
+            "lineInterpolation": "smooth"
           }
         }
       }
@@ -820,7 +824,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[5m])) by (user_is_vip)",
+          "expr": "sum(increase(custom_token_usage_tokens_total{user_id=~\"$user_id\", organization_department=~\"$department\", scenario_id=~\"$scenario_id\", token_type=\"total\"}[15m])) by (user_is_vip)",
           "legendFormat": "VIP: {{user_is_vip}}"
         }
       ],
@@ -838,9 +842,11 @@
           "unit": "short",
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 30,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": true,
+            "pointSize": 1,
+            "lineInterpolation": "smooth"
           }
         }
       }
