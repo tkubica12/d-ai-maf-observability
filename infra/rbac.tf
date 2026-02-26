@@ -50,7 +50,10 @@ resource "azapi_resource" "otel_collector_federated_credential" {
     ignore_changes = [body]
   }
 
-  depends_on = [azapi_resource.aks]
+  depends_on = [
+    azapi_resource.aks,
+    azapi_resource.agent_federated_credential
+  ]
 }
 
 # Generate UUIDs for role assignments

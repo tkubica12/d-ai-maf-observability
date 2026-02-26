@@ -1,5 +1,5 @@
 resource "azapi_resource" "ai_services" {
-  type      = "Microsoft.CognitiveServices/accounts@2025-04-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts@2025-06-01"
   name      = "${var.project_name}-${var.environment}-aiservices"
   location  = var.location
   parent_id = azapi_resource.rg.id
@@ -70,20 +70,22 @@ resource "azapi_resource" "ai_model_deployment_workaround" {
 }
 
 resource "azapi_resource" "ai_project" {
-  type      = "Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-07-01-preview"
   name      = "${var.project_name}-project"
   location  = var.location
   parent_id = azapi_resource.ai_services.id
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   body = {
-    identity = {
-      type = "SystemAssigned"
-    }
     properties = {
       description = "MAF Observability AI Project"
       displayName = "MAF Observability Project"
     }
   }
 
-  depends_on = [azapi_resource.ai_services]
+  schema_validation_enabled = false
+  depends_on                = [azapi_resource.ai_services]
 }

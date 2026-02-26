@@ -4,17 +4,6 @@
 
 This Terraform configuration deploys a complete Azure infrastructure for Microsoft Agent Framework observability demonstrations.
 
-## Azure Resources
-
-- **Azure Kubernetes Service (AKS)** - with UAMI support, OIDC federation, and workload identity
-- **Azure Container Registry (ACR)** - for container image storage
-- **Application Insights** - APM and telemetry collection
-- **Azure AI Foundry v2** - cognitive services account (kind: AIServices)
-- **AI Model Deployment** - gpt-5-nano in Global Standard with 100 capacity
-- **Azure Managed Grafana** - metrics visualization and dashboards
-- **Azure Monitor for Prometheus** - metrics collection and storage
-- **Custom VNET** - isolated networking with NAT gateway for AKS
-
 ## Prerequisites
 
 - Terraform >= 1.5.0
@@ -67,16 +56,7 @@ See `variables.tf` for complete documentation of all available parameters.
 
 ## Outputs
 
-After successful deployment, Terraform provides the following outputs:
-
-- AKS cluster name and OIDC issuer URL
-- ACR login server
-- Azure AI Services endpoint and AI Project endpoint
-- Application Insights connection strings (sensitive)
-- Grafana and Prometheus endpoints
-- Network resource IDs
-- Ingress URLs (API Tool, MCP Tool, Aspire Dashboard)
-- Langfuse URL and credentials (sensitive)
+Run `terraform output` to see all available outputs including URLs, credentials, and connection strings.
 
 ## File Organization
 
