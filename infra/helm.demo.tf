@@ -46,8 +46,9 @@ resource "helm_release" "maf_demo" {
         remoteWriteEndpoint = "${azapi_resource.prometheus_data_collection_endpoint.output.properties.metricsIngestion.endpoint}/dataCollectionRules/${azapi_resource.prometheus_data_collection_rule.output.properties.immutableId}/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
       }
       langfuse = {
-        endpoint      = "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel"
-        authorization = try(helm_release.langfuse.id != "" ? local.langfuse_auth_header : "", "")
+        enabled       = var.enable_langfuse
+        endpoint      = var.enable_langfuse ? "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel" : ""
+        authorization = var.enable_langfuse ? local.langfuse_auth_header : ""
       }
       clusterName = azapi_resource.aks.name
       ingress = {

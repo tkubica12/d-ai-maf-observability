@@ -1,5 +1,7 @@
 # Langfuse LLM Observability Platform
 resource "helm_release" "langfuse" {
+  count = var.enable_langfuse ? 1 : 0
+
   name      = "langfuse"
   chart     = "langfuse"
   namespace = "langfuse"
@@ -12,16 +14,16 @@ resource "helm_release" "langfuse" {
       # Langfuse application configuration
       langfuse = {
         salt = {
-          value = random_password.langfuse_salt.result
+          value = random_password.langfuse_salt[count.index].result
         }
         nextauth = {
           url = "https://langfuse.${var.base_domain}"
           secret = {
-            value = random_password.langfuse_nextauth_secret.result
+            value = random_password.langfuse_nextauth_secret[count.index].result
           }
         }
         encryptionKey = {
-          value = random_id.langfuse_encryption_key.hex
+          value = random_id.langfuse_encryption_key[count.index].hex
         }
         # Headless initialization - auto-create user, org, and project with API keys
         # Note: Using additionalEnv (not extraEnv) as per Helm chart template
@@ -60,7 +62,7 @@ resource "helm_release" "langfuse" {
           },
           {
             name  = "LANGFUSE_INIT_USER_PASSWORD"
-            value = random_password.langfuse_admin_password.result
+            value = random_password.langfuse_admin_password[count.index].result
           }
         ]
         resources = {
@@ -101,7 +103,7 @@ resource "helm_release" "langfuse" {
         deploy = true
         auth = {
           username = "langfuse"
-          password = random_password.langfuse_postgres.result
+          password = random_password.langfuse_postgres[count.index].result
           database = "langfuse"
         }
         primary = {
@@ -124,7 +126,7 @@ resource "helm_release" "langfuse" {
       clickhouse = {
         deploy = true
         auth = {
-          password = random_password.langfuse_clickhouse.result
+          password = random_password.langfuse_clickhouse[count.index].result
         }
         persistence = {
           size = "20Gi"
@@ -157,7 +159,7 @@ resource "helm_release" "langfuse" {
       redis = {
         deploy = true
         auth = {
-          password = random_password.langfuse_redis.result
+          password = random_password.langfuse_redis[count.index].result
         }
         primary = {
           persistence = {
@@ -179,7 +181,7 @@ resource "helm_release" "langfuse" {
       s3 = {
         deploy = true
         auth = {
-          rootPassword = random_password.langfuse_minio.result
+          rootPassword = random_password.langfuse_minio[count.index].result
         }
         persistence = {
           size = "20Gi"
@@ -206,80 +208,100 @@ resource "helm_release" "langfuse" {
 
 # Random passwords for Langfuse components
 resource "random_password" "langfuse_salt" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_nextauth_secret" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_id" "langfuse_encryption_key" {
+  count = var.enable_langfuse ? 1 : 0
+
   byte_length = 32 # 32 bytes = 64 hex characters
 }
 
 resource "random_password" "langfuse_postgres" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_clickhouse" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_redis" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_minio" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 # API keys for headless initialization
 resource "random_password" "langfuse_public_key" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_secret_key" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 resource "random_password" "langfuse_admin_password" {
+  count = var.enable_langfuse ? 1 : 0
+
   length  = 32
   special = false
 }
 
 # Local values for API keys with prefixes
 locals {
-  langfuse_public_key = "pk-lf-${random_password.langfuse_public_key.result}"
-  langfuse_secret_key = "sk-lf-${random_password.langfuse_secret_key.result}"
-  langfuse_auth_header = "Basic ${base64encode("${local.langfuse_public_key}:${local.langfuse_secret_key}")}"
+  langfuse_public_key  = var.enable_langfuse ? "pk-lf-${random_password.langfuse_public_key[0].result}" : null
+  langfuse_secret_key  = var.enable_langfuse ? "sk-lf-${random_password.langfuse_secret_key[0].result}" : null
+  langfuse_auth_header = var.enable_langfuse ? "Basic ${base64encode("${local.langfuse_public_key}:${local.langfuse_secret_key}")}" : ""
 }
 
 # Output Langfuse URL
 output "langfuse_url" {
-  value       = "https://langfuse.${var.base_domain}"
+  value       = var.enable_langfuse ? "https://langfuse.${var.base_domain}" : null
   description = "Langfuse UI URL"
 }
 
 output "langfuse_otlp_endpoint" {
-  value       = "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel"
+  value       = var.enable_langfuse ? "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel" : null
   description = "Langfuse OTLP endpoint for OpenTelemetry collector (internal cluster URL)"
 }
 
 output "langfuse_admin_email" {
-  value       = "admin@maf-demo.local"
+  value       = var.enable_langfuse ? "admin@maf-demo.local" : null
   description = "Langfuse admin user email"
 }
 
 output "langfuse_admin_password" {
-  value       = random_password.langfuse_admin_password.result
+  value       = var.enable_langfuse ? random_password.langfuse_admin_password[0].result : null
   description = "Langfuse admin user password"
   sensitive   = true
 }

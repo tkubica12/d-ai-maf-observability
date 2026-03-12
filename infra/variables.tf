@@ -207,6 +207,16 @@ variable "agent_image_tag" {
   default     = "latest"
 }
 
+variable "enable_langfuse" {
+  type        = bool
+  description = <<-EOT
+    Enable deployment of the Langfuse Helm release and OTEL export pipeline.
+    Set to false to deploy the demo without Langfuse while keeping the rest of
+    the observability stack operational.
+  EOT
+  default     = true
+}
+
 variable "grafana_auth_token" {
   type        = string
   sensitive   = true

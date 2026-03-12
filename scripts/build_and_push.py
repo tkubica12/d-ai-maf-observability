@@ -11,6 +11,7 @@ import re
 import sys
 import subprocess
 import json
+import shutil
 from pathlib import Path
 from typing import Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -78,14 +79,29 @@ def run_command(command: list, capture_output: bool = True) -> Tuple[bool, str]:
                 capture_output=True,
                 text=True,
                 check=False,
-                shell=True  # Required on Windows for az command
+                shell=False
             )
-            return result.returncode == 0, result.stdout.strip()
+            output = result.stdout.strip()
+            if result.returncode != 0 and result.stderr:
+                output = result.stderr.strip() or output
+            return result.returncode == 0, output
         else:
-            result = subprocess.run(command, check=False, shell=True)
+            result = subprocess.run(command, check=False, shell=False)
             return result.returncode == 0, ""
     except Exception as e:
         return False, str(e)
+
+
+def resolve_az_cli() -> str:
+    """Resolve the Azure CLI executable path for the current platform."""
+    configured_path = os.getenv("AZURE_CLI_PATH")
+    if configured_path:
+        return configured_path
+
+    if os.name == "nt":
+        return shutil.which("az.cmd") or shutil.which("az") or "az.cmd"
+
+    return shutil.which("az") or "az"
 
 
 def get_next_version(current_version: str) -> str:
@@ -197,9 +213,11 @@ def build_acr_image(image_name: str, tag: str, source_path: Path,
     """
     print_info(f"Building {image_name}:{tag} using ACR remote build...")
     print_colored(f"Source path: {source_path}", Colors.GRAY)
+
+    az_cli = resolve_az_cli()
     
     command = [
-        "az", "acr", "build",
+        az_cli, "acr", "build",
         "--registry", registry,
         "--resource-group", resource_group,
         "--image", f"{image_name}:{tag}",
@@ -219,8 +237,10 @@ def build_acr_image(image_name: str, tag: str, source_path: Path,
 
 def check_azure_cli() -> None:
     """Check if Azure CLI is installed and user is logged in."""
+    az_cli = resolve_az_cli()
+
     # Check if Azure CLI is installed
-    success, output = run_command(["az", "version", "--output", "json"])
+    success, output = run_command([az_cli, "version", "--output", "json"])
     if not success:
         print_error("Azure CLI is not installed or not working properly. Please install Azure CLI and login.")
     
@@ -231,7 +251,7 @@ def check_azure_cli() -> None:
         print_error("Failed to parse Azure CLI version information.")
     
     # Check if user is logged in
-    success, output = run_command(["az", "account", "show", "--output", "json"])
+    success, output = run_command([az_cli, "account", "show", "--output", "json"])
     if not success:
         print_error("Not logged in to Azure. Please run 'az login' first.")
     
@@ -254,8 +274,10 @@ def verify_acr(acr_name: str, resource_group: str) -> str:
     Returns:
         ACR login server URL
     """
+    az_cli = resolve_az_cli()
+
     success, output = run_command([
-        "az", "acr", "show",
+        az_cli, "acr", "show",
         "--name", acr_name,
         "--resource-group", resource_group,
         "--output", "json"
