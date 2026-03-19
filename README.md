@@ -85,6 +85,7 @@ terraform apply
 ### 4. Run Agent Scenarios
 
 ```powershell
+az aks get-credentials --name mafobs-dev-aks --resource-group rg-maf-observability
 kubectl exec -it -n maf-demo $(kubectl get pods -n maf-demo -l app.kubernetes.io/component=agent -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
 
 # Inside the container:
