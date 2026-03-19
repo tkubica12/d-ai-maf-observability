@@ -71,7 +71,7 @@ terraform init && terraform apply
 ### 2. Build and Push Images
 
 ```powershell
-cd ..\scripts
+cd .\scripts
 uv run build_and_push.py
 ```
 
