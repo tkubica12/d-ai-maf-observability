@@ -36,7 +36,24 @@ This Terraform configuration deploys a complete Azure infrastructure for Microso
    terraform apply
    ```
 
-6. **View outputs:**
+6. **Update DNS for ingress:**
+   After the first `terraform apply`, point the public DNS records for your `base_domain` at the ingress public IP before testing the application URLs or waiting for Let's Encrypt certificates.
+
+   For the current checked-in configuration:
+   - `base_domain = "maf.tomasdemo.org"`
+   - Azure DNS zone: `tomasdemo.org`
+   - Recommended records in that zone:
+     - `maf` A record -> `terraform output -raw ingress_public_ip_address`
+     - `*.maf` A record -> `terraform output -raw ingress_public_ip_address`
+
+   This makes these ingress hosts resolve correctly:
+   - `api-tool.maf.tomasdemo.org`
+   - `mcp-tool.maf.tomasdemo.org`
+   - `aspire.maf.tomasdemo.org`
+   - `aspire-anon.maf.tomasdemo.org`
+   - `langfuse.maf.tomasdemo.org` when Langfuse is enabled
+
+7. **View outputs:**
    ```bash
    terraform output
    ```

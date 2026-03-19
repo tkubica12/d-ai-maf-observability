@@ -58,6 +58,7 @@ graph TB
 
 - Azure subscription, Terraform >= 1.5.0, Azure CLI (logged in), kubectl
 - Python 3.12+ with `uv`
+- A DNS zone you can edit for your chosen `base_domain` (for the checked-in config, `base_domain = "maf.tomasdemo.org"` so you need access to the `tomasdemo.org` zone)
 
 ### 1. Deploy Infrastructure
 
@@ -68,21 +69,68 @@ cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 ```
 
-### 2. Build and Push Images
+### 2. Configure DNS for ingress
+
+After the first `terraform apply`, point your public DNS records at the ingress public IP before testing the external URLs or waiting for Let's Encrypt certificates.
+
+For the current checked-in config:
+
+- `base_domain = "maf.tomasdemo.org"`
+- Azure DNS zone: `tomasdemo.org`
+- Required public hosts:
+  - `api-tool.maf.tomasdemo.org`
+  - `mcp-tool.maf.tomasdemo.org`
+  - `aspire.maf.tomasdemo.org`
+  - `aspire-anon.maf.tomasdemo.org`
+  - `langfuse.maf.tomasdemo.org` when Langfuse is enabled
+
+The simplest setup is to keep these two A records in the `tomasdemo.org` zone pointed at the current ingress IP:
+
+- `maf`
+- `*.maf`
+
+Example:
+
+```powershell
+cd .\infra
+$ingressIp = terraform output -raw ingress_public_ip_address
+$ingressFqdn = terraform output -raw ingress_public_ip_fqdn
+
+Write-Host "Ingress IP: $ingressIp"
+Write-Host "Ingress FQDN: $ingressFqdn"
+
+az network dns record-set a update `
+  --resource-group rg-base `
+  --zone-name tomasdemo.org `
+  --name maf `
+  --set "ARecords[0].ipv4Address=$ingressIp"
+
+az network dns record-set a update `
+  --resource-group rg-base `
+  --zone-name tomasdemo.org `
+  --name "*.maf" `
+  --set "ARecords[0].ipv4Address=$ingressIp"
+```
+
+If the `maf` or `*.maf` record sets do not exist yet in your DNS zone, create them first and then point them at the same ingress IP.
+
+If you prefer not to use a wildcard, create individual records for the hostnames above instead.
+
+### 3. Build and Push Images
 
 ```powershell
 cd .\scripts
 uv run build_and_push.py
 ```
 
-### 3. Deploy Updated Images
+### 4. Deploy Updated Images
 
 ```powershell
 cd ..\infra
 terraform apply
 ```
 
-### 4. Run Agent Scenarios
+### 5. Run Agent Scenarios
 
 ```powershell
 az aks get-credentials --name mafobs-dev-aks --resource-group rg-maf-observability
@@ -95,7 +143,7 @@ uv run main.py -s local-maf-multiagent   # Multi-agent with Magentic orchestrati
 uv run main.py                           # Run all scenarios
 ```
 
-### 5. Explore Observability
+### 6. Explore Observability
 
 ```powershell
 cd infra
